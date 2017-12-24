@@ -219,13 +219,13 @@ int main(int argc, char **argv)
 //	For file input we do not need options like Q, G and C,
 //	We do need an option to specify the filename
 #if (!defined(HAVE_WAVFILES) && !defined(HAVE_RAWFILES))
-    while ((opt = getopt(argc, argv, "W:M:B:C:P:G:S:Q:p")) != -1)
+    while ((opt = getopt(argc, argv, "W:M:B:C:P:G:S:Qp:")) != -1)
     {
 #elif HAVE_RTL_TCP
-    while ((opt = getopt(argc, argv, "W:M:B:C:P:G:S:H:I:Q:p")) != -1)
+    while ((opt = getopt(argc, argv, "W:M:B:C:P:G:S:H:I:Qp:")) != -1)
     {
 #else
-    while ((opt = getopt(argc, argv, "W:M:B:P:S:F:p")) != -1)
+    while ((opt = getopt(argc, argv, "W:M:B:P:S:F:p:")) != -1)
     {
 #endif
         fprintf(stderr, "opt = %c %s\n", opt, optarg);
