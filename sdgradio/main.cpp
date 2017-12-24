@@ -219,16 +219,16 @@ int main(int argc, char **argv)
 //	For file input we do not need options like Q, G and C,
 //	We do need an option to specify the filename
 #if (!defined(HAVE_WAVFILES) && !defined(HAVE_RAWFILES))
-    while ((opt = getopt(argc, argv, "W:M:B:C:P:G:S:Q")) != -1)
+    while ((opt = getopt(argc, argv, "W:M:B:C:P:G:S:Q:p")) != -1)
     {
 #elif HAVE_RTL_TCP
-    while ((opt = getopt(argc, argv, "W:M:B:C:P:G:S:H:I:Q")) != -1)
+    while ((opt = getopt(argc, argv, "W:M:B:C:P:G:S:H:I:Q:p")) != -1)
     {
 #else
-    while ((opt = getopt(argc, argv, "W:M:B:P:S:F:")) != -1)
+    while ((opt = getopt(argc, argv, "W:M:B:P:S:F:p")) != -1)
     {
 #endif
-        fprintf(stderr, "opt = %c\n", opt);
+        fprintf(stderr, "opt = %c %s\n", opt, optarg);
         switch (opt)
         {
 
@@ -418,7 +418,8 @@ void printOptions(void)
                           -G Gain     gain for device (range 1 .. 100)\n\
                           -Q          if set, set autogain for device true\n\
 	                  -F filename in case the input is from file\n\
-                          -S hexnumber use hexnumber to identify program\n\n");
+                          -S hexnumber use hexnumber to identify program\n\
+                          -p ppmoffset use ppmoffset to correct oscillator frequency\n\n");
 }
 
 bool matches(std::string s1, std::string s2)
