@@ -245,7 +245,7 @@ static void programdataHandler(audiodata *d, void *ctx)
         protL.append(std::to_string(h));
     }
 
-    fprintf(stderr, "{\"length\":\"%d\",\"bitrate\":\"%d\",\"protectionLevel\":\"%s\",\"dabType\":\"%s\",\"language\":\"%s\",\"programType\":\"%s\"}",
+    fprintf(stderr, "{\"length\":\"%d\",\"bitrate\":\"%d\",\"protectionLevel\":\"%s\",\"dabType\":\"%s\",\"language\":\"%s\",\"programType\":\"%s\"}\n",
             d->length, d->bitRate, protL.c_str(), (d->ASCTy == 077 ? "DAB+" : "DAB"),
             get_programm_language_string(d->language), get_programm_type_string(d->programType));
 }
@@ -506,10 +506,9 @@ int main(int argc, char **argv)
     if (!ensembleRecognized.load())
         while (!ensembleRecognized.load() && (++timeOut < waitingTime))
         {
-            fprintf(stderr, "%d ", waitingTime - timeOut);
+            fprintf(stderr, "%d seconds remaining...\n", waitingTime - timeOut);
             sleep(1);
         }
-    fprintf(stderr, "\n");
 
     if (!ensembleRecognized.load())
     {
