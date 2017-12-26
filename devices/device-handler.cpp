@@ -80,4 +80,7 @@ void	deviceHandler::set_autogain	(bool b) {
 	(void)b;
 }
 
+void	deviceHandler::set_KhzOffset	(int32_t o) {
+	vfoOffset = o;
+}
 

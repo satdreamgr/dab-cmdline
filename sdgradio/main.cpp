@@ -316,6 +316,7 @@ int main(int argc, char **argv)
     std::string theChannel = "11C";
     uint8_t theBand = BAND_III;
     int16_t ppmCorrection = 0;
+    int32_t khzOffset = 0;
     int theGain = 35; // scale = 0 .. 100
     int16_t waitingTime = 10;
     bool autogain = false;
@@ -347,10 +348,10 @@ int main(int argc, char **argv)
 //	For file input we do not need options like Q, G and C,
 //	We do need an option to specify the filename
 #if (!defined(HAVE_WAVFILES) && !defined(HAVE_RAWFILES))
-    while ((opt = getopt(argc, argv, "W:M:B:C:P:G:S:Qp:")) != -1)
+    while ((opt = getopt(argc, argv, "W:M:B:C:P:G:S:Qp:k:")) != -1)
     {
 #elif HAVE_RTL_TCP
-    while ((opt = getopt(argc, argv, "W:M:B:C:P:G:S:H:I:Qp:")) != -1)
+    while ((opt = getopt(argc, argv, "W:M:B:C:P:G:S:H:I:Qp:k:")) != -1)
     {
 #else
     while ((opt = getopt(argc, argv, "W:M:B:P:S:F:p:")) != -1)
@@ -381,6 +382,10 @@ int main(int argc, char **argv)
 
         case 'p':
             ppmCorrection = atoi(optarg);
+            break;
+
+        case 'k':
+            khzOffset = atoi(optarg);
             break;
 #if defined(HAVE_WAVFILES) || defined(HAVE_RAWFILES)
         case 'F':
@@ -470,6 +475,8 @@ int main(int argc, char **argv)
     theDevice->setGain(theGain);
     if (autogain)
         theDevice->set_autogain(autogain);
+    if (khzOffset)
+        theDevice->set_KhzOffset(khzOffset);
     theDevice->setVFOFrequency(frequency);
     theDevice->restartReader();
     //
@@ -547,7 +554,8 @@ void printOptions(void)
                           -Q          if set, set autogain for device true\n\
 	                  -F filename in case the input is from file\n\
                           -S hexnumber use hexnumber to identify program\n\
-                          -p ppmoffset use ppmoffset to correct oscillator frequency\n\n");
+                          -p ppmoffset use ppmoffset to correct oscillator frequency\n\
+                          -k khzOffset use khzOffset to correct initial tuning offset\n\n");
 }
 
 bool matches(std::string s1, std::string s2)
