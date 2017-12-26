@@ -64,6 +64,111 @@ static std::atomic<bool> ensembleRecognized;
 std::string programName = "Classic FM";
 int32_t serviceIdentifier = -1;
 
+static const char *table12[] = {
+    "None",
+    "News",
+    "Current affairs",
+    "Information",
+    "Sport",
+    "Education",
+    "Drama",
+    "Arts",
+    "Science",
+    "Talk",
+    "Pop music",
+    "Rock music",
+    "Easy listening",
+    "Light classical",
+    "Classical music",
+    "Other music",
+    "Wheather",
+    "Finance",
+    "Children\'s",
+    "Factual",
+    "Religion",
+    "Phone in",
+    "Travel",
+    "Leisure",
+    "Jazz and Blues",
+    "Country music",
+    "National music",
+    "Oldies music",
+    "Folk music",
+    "entry 29 not used",
+    "entry 30 not used",
+    "entry 31 not used"};
+
+static const char *table9[] = {
+    "unknown language",
+    "Albanian",
+    "Breton",
+    "Catalan",
+    "Croatian",
+    "Welsh",
+    "Czech",
+    "Danish",
+    "German",
+    "English",
+    "Spanish",
+    "Esperanto",
+    "Estonian",
+    "Basque",
+    "Faroese",
+    "French",
+    "Frisian",
+    "Irish",
+    "Gaelic",
+    "Galician",
+    "Icelandic",
+    "Italian",
+    "Lappish",
+    "Latin",
+    "Latvian",
+    "Luxembourgian",
+    "Lithuanian",
+    "Hungarian",
+    "Maltese",
+    "Dutch",
+    "Norwegian",
+    "Occitan",
+    "Polish",
+    "Postuguese",
+    "Romanian",
+    "Romansh",
+    "Serbian",
+    "Slovak",
+    "Slovene",
+    "Finnish",
+    "Swedish",
+    "Tuskish",
+    "Flemish",
+    "Walloon"};
+
+static const char *get_programm_type_string(int16_t type)
+{
+    if (type > 0x40)
+    {
+        fprintf(stderr, "GUI: program type wrong (%d)\n", type);
+        return table12[0];
+    }
+    if (type < 0)
+        return " ";
+
+    return table12[type];
+}
+
+static const char *get_programm_language_string(int16_t language)
+{
+    if (language > 43)
+    {
+        fprintf(stderr, "GUI: wrong language (%d)\n", language);
+        return table9[0];
+    }
+    if (language < 0)
+        return " ";
+    return table9[language];
+}
+
 static void sighandler(int signum)
 {
     fprintf(stderr, "Signal caught, terminating!\n");
@@ -120,6 +225,29 @@ static void programdataHandler(audiodata *d, void *ctx)
     fprintf(stderr, "\tsubChId\t\t= %d\n", d->subchId);
     fprintf(stderr, "\tprotection\t= %d\n", d->protLevel);
     fprintf(stderr, "\tbitrate\t\t= %d\n", d->bitRate);
+
+    uint16_t h = d->protLevel;
+    std::string protL;
+    if (!d->shortForm)
+    {
+        protL = "EEP ";
+        if ((h & (1 << 2)) == 0)
+            protL.append("A ");
+        else
+            protL.append("B ");
+        h = (h & 03) + 1;
+        protL.append(std::to_string(h));
+    }
+    else
+    {
+        h = h & 03;
+        protL = "UEP ";
+        protL.append(std::to_string(h));
+    }
+
+    fprintf(stderr, "{\"length\":\"%d\",\"bitrate\":\"%d\",\"protectionLevel\":\"%s\",\"dabType\":\"%s\",\"language\":\"%s\",\"programType\":\"%s\"}",
+            d->length, d->bitRate, protL.c_str(), (d->ASCTy == 077 ? "DAB+" : "DAB"),
+            get_programm_language_string(d->language), get_programm_type_string(d->programType));
 }
 
 //
