@@ -83,6 +83,8 @@ void	controlThread (rtlsdrHandler *theStick) {
 void	agcThread(rtlsdrHandler *theStick) {
 	while (theStick->isRunning()) {
 	   usleep(1000 * 50); // wait 50 ms
+	   if (!theStick->isRunning()) // we might stopped running while sleeping
+	      break;
 	   theStick->checkAGC();
 	}
 }
@@ -496,7 +498,7 @@ void rtlsdrHandler::checkAGC(void)
             if(currentGainCount > 0)
             {
                 setGain(currentGainCount - 1);
-                std::cerr << "RTL_SDR:" << "Decreased gain to" << (float) currentGain / 10 << std::endl;
+                std::cerr << "RTL_SDR:" << "Decreased gain to " << (float) currentGain / 10 << std::endl;
             }
         }
         else
@@ -515,7 +517,7 @@ void rtlsdrHandler::checkAGC(void)
                 if(newMinValue >=0 && newMaxValue <= 255)
                 {
                     setGain(currentGainCount + 1);
-                    std::cerr << "RTL_SDR:" << "Increased gain to" << (float) currentGain / 10 << std::endl;
+                    std::cerr << "RTL_SDR:" << "Increased gain to " << (float) currentGain / 10 << std::endl;
                 }
             }
         }
