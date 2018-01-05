@@ -27,6 +27,7 @@
 #include	"ringbuffer.h"
 #include	"device-handler.h"
 #include	<thread>
+#include	<atomic>
 class	dll_driver;
 typedef	void *HINSTANCE;
 //
@@ -108,7 +109,7 @@ private:
 	int		*gains;
 	int16_t		gainsCount;
 	int		gain;
-	bool		running;
+	std::atomic<bool> running;
 	int		frequency;
 	uint8_t		minValue;
 	uint8_t		maxValue;
