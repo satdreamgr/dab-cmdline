@@ -223,7 +223,8 @@ int16_t	i;
 
 	running	= false;
 	std:cerr << "RTL_SDR: running set to false.. join thread!" << std::endl;
-	agcHandle.join();
+        if (agcHandle.joinable())
+	   agcHandle.join();
 
 	if (open)
 	   this -> rtlsdr_close (device);
@@ -274,7 +275,8 @@ void	rtlsdrHandler::stopReader	(void) {
 	workerHandle. join ();
 	running	= false;
 	std:cerr << "RTL_SDR: running set to false.. join thread!" << std::endl;
-	agcHandle.join();
+	if (agcHandle.joinable())
+	   agcHandle.join();
 }
 //
 //	when selecting with an integer in the range 0 .. 100
