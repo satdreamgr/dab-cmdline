@@ -30,6 +30,9 @@
 #include	"rtl-sdr.h"
 #include	"rtlsdr-handler.h"
 
+#include <unistd.h>
+#include <iostream>
+
 #ifdef	__MINGW32__
 #define	GETPROCADDRESS	GetProcAddress
 #else
@@ -51,6 +54,19 @@ rtlsdrHandler	*theStick	= (rtlsdrHandler *)ctx;
 	   return;
 
 	(void) theStick -> _I_Buffer -> putDataIntoBuffer (buf, len);
+
+	// Check if device is overloaded
+	uint8_t minValue = 255;
+	uint8_t maxValue = 0;
+
+	for (uint32_t i = 0; i < len; i ++) {
+	   if (minValue > buf[i])
+	      minValue = buf[i];
+	   if(maxValue < buf[i])
+	      maxValue = buf[i];
+	}
+
+	(void) theStick -> setMinMaxValue(minValue, maxValue);
 }
 //
 //	for handling the events in libusb, we need a controlthread
@@ -63,6 +79,14 @@ void	controlThread (rtlsdrHandler *theStick) {
 	                          0,
 	                          READLEN_DEFAULT);
 }
+
+void	agcThread(rtlsdrHandler *theStick) {
+	while (theStick->isRunning()) {
+	   usleep(1000 * 50); // wait 50 ms
+	   theStick->checkAGC();
+	}
+}
+
 //
 //	Our wrapper is a simple classs
 	rtlsdrHandler::rtlsdrHandler (int32_t	frequency,
@@ -89,6 +113,13 @@ int16_t	i;
 	this	-> vfoOffset	= 0;
 	gains			= NULL;
 	running			= false;
+
+	minValue		= 255;
+	maxValue		= 0;
+	currentGain		= 0;
+	currentGainCount	= 0;
+	isAGC			= false;
+	isHwAGC			= false;
 
 #ifdef	__MINGW32__
 	const char *libraryString = "rtlsdr.dll";
@@ -147,7 +178,6 @@ int16_t	i;
 
 	r			= this -> rtlsdr_get_sample_rate (device);
 	fprintf (stderr, "samplerate set to %d\n", r);
-	rtlsdr_set_tuner_gain_mode (device, 1);
 
 	gainsCount	= rtlsdr_get_tuner_gains (device, NULL);
 	fprintf (stderr, "Supported gain values (%d): ", gainsCount);
@@ -156,15 +186,29 @@ int16_t	i;
 	for (i = 0; i < gainsCount; i ++)
 	   fprintf (stderr, "%d.%d ", gains [i] / 10, gains [i] % 10);
 	fprintf (stderr, "\n");
-	gain		= gain * gainsCount / 100;
+
+	//gain		= gain * gainsCount / 100;
+
 	if (ppmCorrection != 0)
 	   rtlsdr_set_freq_correction (device, ppmCorrection);
-	if (autogain)
-	   rtlsdr_set_agc_mode (device, 1);
-	fprintf (stderr, "effective gain: index %d, gain %d\n",
-	                                   gain, gains [gain]);
-	rtlsdr_set_tuner_gain (device, gains [gain]);
+
+	//if (autogain)
+	//   rtlsdr_set_agc_mode (device, 1);
+	//fprintf (stderr, "effective gain: index %d, gain %d\n",
+	//                                   gain, gains [gain]);
+	//rtlsdr_set_tuner_gain (device, gains [gain]);
+
 	_I_Buffer		= new RingBuffer<uint8_t>(1024 * 1024);
+
+	// Always use manual gain, the AGC is implemented in software
+	rtlsdr_set_tuner_gain_mode(device, 1);
+
+	// Disable hardware AGC by default
+	setHwAgc(false);
+
+	// Enable AGC by default
+	setAgc(true);
+
 }
 
 	rtlsdrHandler::~rtlsdrHandler	(void) {
@@ -174,6 +218,8 @@ int16_t	i;
 	}
 
 	running	= false;
+	agcHandle.join();
+
 	if (open)
 	   this -> rtlsdr_close (device);
 	if (Handle != NULL) 
@@ -211,6 +257,7 @@ int32_t	r;
 
 	workerHandle = std::thread (controlThread, this);
 	running	= true;
+	agcHandle = std::thread (agcThread, this);
 	return true;
 }
 
@@ -221,13 +268,24 @@ void	rtlsdrHandler::stopReader	(void) {
 	this -> rtlsdr_cancel_async (device);
 	workerHandle. join ();
 	running	= false;
+	agcHandle.join();
 }
 //
 //	when selecting with an integer in the range 0 .. 100
 //	first find the table value
 void	rtlsdrHandler::setGain	(int32_t g) {
-	theGain	= gains [g * gainsCount / 100];
-	rtlsdr_set_tuner_gain (device, theGain);
+	if (g > gainsCount) {
+	   std::cerr << "RTL_SDR:" << "Unknown gain count:" << g;
+	   return;
+	}
+
+	currentGainCount = g;
+	currentGain = gains[g];
+
+	int ret = rtlsdr_set_tuner_gain (device, currentGain);
+	if (ret != 0) {
+	   std::cerr << "RTL_SDR:" << "Setting gain failed";
+	}
 }
 
 bool	rtlsdrHandler::has_autogain	(void) {
@@ -422,3 +480,71 @@ int16_t	rtlsdrHandler::bitDepth	(void) {
 	return 8;
 }
 
+void rtlsdrHandler::setMinMaxValue(uint8_t minValue, uint8_t maxValue) {
+	this->minValue = minValue;
+	this->maxValue = maxValue;
+}
+
+void rtlsdrHandler::checkAGC(void)
+{
+    if(isAGC)
+    {
+        // Check for overloading
+        if(minValue == 0 || maxValue == 255)
+        {
+            // We have to decrease the gain
+            if(currentGainCount > 0)
+            {
+                setGain(currentGainCount - 1);
+                std::cerr << "RTL_SDR:" << "Decreased gain to" << (float) currentGain / 10 << std::endl;
+            }
+        }
+        else
+        {
+            if(currentGainCount < (gainsCount - 1))
+            {
+                // Calc if a gain increase overloads the device. Calc it from the gain values
+                int newGain = gains[currentGainCount + 1];
+                float deltaGain = ((float) newGain / 10) - ((float) currentGain / 10);
+                float linGain = pow(10, deltaGain / 20);
+
+                int newMaxValue = (float) maxValue * linGain;
+                int newMinValue = (float) minValue / linGain;
+
+                // We have to increase the gain
+                if(newMinValue >=0 && newMaxValue <= 255)
+                {
+                    setGain(currentGainCount + 1);
+                    std::cerr << "RTL_SDR:" << "Increased gain to" << (float) currentGain / 10 << std::endl;
+                }
+            }
+        }
+    }
+    else // AGC is off
+    {
+        if(minValue == 0 || maxValue == 255)
+        {
+            std::cerr << "RTL_SDR:" << "ADC overload. Maybe you are using a to high gain." << std::endl;
+        }
+    }
+}
+
+bool rtlsdrHandler::isRunning(void) {
+	return running;
+}
+
+void rtlsdrHandler::setHwAgc(bool hwAGC) {
+	isHwAGC = hwAGC;
+	rtlsdr_set_agc_mode(device, hwAGC ? 1 : 0);
+}
+
+void rtlsdrHandler::setAgc(bool AGC) {
+	if (AGC == true) {
+	   isAGC = true;
+	}
+	else
+	{
+	   isAGC = false;
+	   setGain(currentGainCount);
+	}
+}

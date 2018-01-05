@@ -472,11 +472,11 @@ int main(int argc, char **argv)
         exit(4);
     }
 
-    theDevice->setGain(theGain);
-    if (autogain)
-        theDevice->set_autogain(autogain);
-    if (khzOffset)
-        theDevice->set_KhzOffset(khzOffset);
+    //theDevice->setGain(theGain);
+    //if (autogain)
+    //    theDevice->set_autogain(autogain);
+    //if (khzOffset)
+    //    theDevice->set_KhzOffset(khzOffset);
     theDevice->setVFOFrequency(frequency);
     theDevice->restartReader();
     //

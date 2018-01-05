@@ -82,6 +82,11 @@ public:
 	void		setGain		(int32_t);
 	bool		has_autogain	(void);
 	void		set_autogain	(bool);
+	void		setMinMaxValue	(uint8_t, uint8_t);
+	void		checkAGC	(void);
+	bool		isRunning	(void);
+	void		setAgc		(bool);
+	void		setHwAgc	(bool);
 //
 //	These need to be visible for the separate usb handling thread
 	RingBuffer<uint8_t>	*_I_Buffer;
@@ -96,6 +101,7 @@ private:
 	int16_t		ppmCorrection;
 	HINSTANCE	Handle;
 	std::thread	workerHandle;
+	std::thread	agcHandle;
 	int32_t		lastFrequency;
 	bool		libraryLoaded;
 	bool		open;
@@ -104,6 +110,12 @@ private:
 	int		gain;
 	bool		running;
 	int		frequency;
+	uint8_t		minValue;
+	uint8_t		maxValue;
+	bool		isAGC;
+	bool		isHwAGC;
+	uint16_t	currentGainCount;
+	int		currentGain;
 //	here we need to load functions from the dll
 	bool		load_rtlFunctions	(void);
 	pfnrtlsdr_open	rtlsdr_open;
