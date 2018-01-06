@@ -286,7 +286,14 @@ static void bytesOut_Handler(uint8_t *data, int16_t amount, uint8_t type,
 static void pcmHandler(int16_t *buffer, int size, int rate, bool isStereo,
                        void *ctx)
 {
+#ifdef  AAC_OUT
+//      Now we know that we have been cheating, the int16_t * buffer
+//      is actually an uint8_t * buffer, however, the size
+//      gives the correct amount of elements
+    fwrite((void *)buffer, size, 1, stdout);
+#else
     fwrite((void *)buffer, size, 2, stdout);
+#endif
 }
 
 static void systemData(bool flag, int16_t snr, int32_t freqOff, void *ctx)
