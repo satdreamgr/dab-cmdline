@@ -56,6 +56,9 @@ if(DEFINED RTL_TCP)
    set(objectName dab-rtl_tcp-sdgradio)
 endif ()
 
+if(DEFINED AAC_OUT)
+  add_definitions(-DAAC_OUT)
+endif ()
 #########################################################################
 	find_package (PkgConfig)
 
