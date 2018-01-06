@@ -191,28 +191,24 @@ int16_t	i;
 	   fprintf (stderr, "%d.%d ", gains [i] / 10, gains [i] % 10);
 	fprintf (stderr, "\n");
 
-	//gain		= gain * gainsCount / 100;
+	gain		= gain * gainsCount / 100;
+	currentGainCount = gain;
 
 	if (ppmCorrection != 0)
 	   rtlsdr_set_freq_correction (device, ppmCorrection);
-
-	//if (autogain)
-	//   rtlsdr_set_agc_mode (device, 1);
-	//fprintf (stderr, "effective gain: index %d, gain %d\n",
-	//                                   gain, gains [gain]);
-	//rtlsdr_set_tuner_gain (device, gains [gain]);
 
 	_I_Buffer		= new RingBuffer<uint8_t>(1024 * 1024);
 
 	// Always use manual gain, the AGC is implemented in software
 	rtlsdr_set_tuner_gain_mode(device, 1);
 
+	setGain(currentGainCount);
+
 	// Disable hardware AGC by default
-	setHwAgc(false);
+	setHwAgc(autogain);
 
 	// Enable AGC by default
 	setAgc(true);
-
 }
 
 	rtlsdrHandler::~rtlsdrHandler	(void) {
@@ -262,9 +258,8 @@ int32_t	r;
            return false;
 
 	workerHandle = std::thread (controlThread, this);
-	rtlsdr_set_tuner_gain (device, theGain);
-	if (autogain)
-	   rtlsdr_set_agc_mode (device, 1);
+	setGain(currentGain);
+	setHwAgc(autogain);
 	running	= true;
 	agcHandle = std::thread (agcThread, this);
 	return true;
