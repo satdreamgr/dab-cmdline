@@ -258,7 +258,7 @@ int32_t	r;
            return false;
 
 	workerHandle = std::thread (controlThread, this);
-	setGain(currentGain);
+	setGain(currentGainCount);
 	setHwAgc(autogain);
 	running	= true;
 	agcHandle = std::thread (agcThread, this);
