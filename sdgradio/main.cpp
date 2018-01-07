@@ -61,6 +61,9 @@ static std::atomic<bool> timesyncSet;
 
 static std::atomic<bool> ensembleRecognized;
 
+static std::atomic<int32_t> lastFreqOff;
+static std::atomic<int16_t> lastSnr;
+
 std::string programName = "Classic FM";
 int32_t serviceIdentifier = -1;
 
@@ -299,9 +302,13 @@ static void pcmHandler(int16_t *buffer, int size, int rate, bool isStereo,
 static void systemData(bool flag, int16_t snr, int32_t freqOff, void *ctx)
 {
     (void)ctx;
-    fprintf(stderr, "{\"snr\":\"%d\"}\n", snr);
-    fprintf(stderr, "synced = %s, snr = %d, offset = %d\n", flag ? "on" : "off",
-            snr, freqOff);
+    if (abs(lastFreqOff - freqOff) > 100 || abs(lastSnr - snr) > 1)
+    {
+        fprintf(stderr, "{\"snr\":\"%d\",\"synced\":\"%s\",\"offset\":\"%d\"}\n",
+                snr, flag ? "on" : "off", freqOff);
+        lastFreqOff = freqOff;
+        lastSnr = snr;
+    }
 }
 
 static void fibQuality(int16_t q, void *ctx)
