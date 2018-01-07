@@ -61,6 +61,11 @@ static std::atomic<bool> timesyncSet;
 
 static std::atomic<bool> ensembleRecognized;
 
+static std::atomic<int32_t> lastFreqOff;
+static std::atomic<int16_t> lastSnr;
+static std::atomic<int16_t> lastFicQuality;
+static std::atomic<int16_t> lastMcsQuality;
+
 std::string programName = "Classic FM";
 int32_t serviceIdentifier = -1;
 
@@ -286,27 +291,46 @@ static void bytesOut_Handler(uint8_t *data, int16_t amount, uint8_t type,
 static void pcmHandler(int16_t *buffer, int size, int rate, bool isStereo,
                        void *ctx)
 {
+#ifdef  AAC_OUT
+//      Now we know that we have been cheating, the int16_t * buffer
+//      is actually an uint8_t * buffer, however, the size
+//      gives the correct amount of elements
+    fwrite((void *)buffer, size, 1, stdout);
+#else
     fwrite((void *)buffer, size, 2, stdout);
+#endif
 }
 
 static void systemData(bool flag, int16_t snr, int32_t freqOff, void *ctx)
 {
     (void)ctx;
-    fprintf(stderr, "{\"snr\":\"%d\"}\n", snr);
-    fprintf(stderr, "synced = %s, snr = %d, offset = %d\n", flag ? "on" : "off",
-            snr, freqOff);
+    if (abs(lastFreqOff - freqOff) > 100 || abs(lastSnr - snr) > 1)
+    {
+        fprintf(stderr, "{\"snr\":\"%d\",\"synced\":\"%s\",\"offset\":\"%d\"}\n",
+                snr, flag ? "on" : "off", freqOff);
+        lastFreqOff = freqOff;
+        lastSnr = snr;
+    }
 }
 
 static void fibQuality(int16_t q, void *ctx)
 {
     (void)ctx;
-    fprintf(stderr, "fic quality = %d\n", q);
+    if (abs(lastFicQuality - q) > 1)
+    {
+        fprintf(stderr, "{\"fic_quality\":\"%d\"}\n", q);
+        lastFicQuality = q;
+    }
 }
 
 static void mscQuality(int16_t fe, int16_t rsE, int16_t aacE, void *ctx)
 {
     (void)ctx;
-    fprintf(stderr, "msc quality = %d %d %d\n", fe, rsE, aacE);
+    if (abs(lastMcsQuality - fe) > 1)
+    {
+        fprintf(stderr, "{\"msc_quality\":\"%d %d %d\"}\n", fe, rsE, aacE);
+        lastMcsQuality = fe;
+    }
 }
 
 int main(int argc, char **argv)
@@ -472,9 +496,9 @@ int main(int argc, char **argv)
         exit(4);
     }
 
-    theDevice->setGain(theGain);
-    if (autogain)
-        theDevice->set_autogain(autogain);
+    //theDevice->setGain(theGain);
+    //if (autogain)
+    //    theDevice->set_autogain(autogain);
     if (khzOffset)
         theDevice->set_KhzOffset(khzOffset);
     theDevice->setVFOFrequency(frequency);
@@ -605,6 +629,7 @@ void selectNext(void)
                 programName.c_str());
         sighandler(9);
     }
+    fprintf(stderr, "{\"ps\":\"%s\"}\n", programName.c_str());
 }
 
 void listener(void)
@@ -632,6 +657,7 @@ void listener(void)
                         programName.c_str());
                 sighandler(9);
             }
+            fprintf(stderr, "{\"ps\":\"%s\"}\n", programName.c_str());
         }
     }
 }
