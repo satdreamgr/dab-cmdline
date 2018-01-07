@@ -623,13 +623,13 @@ void selectNext(void)
 
     programName = programNames[foundIndex];
     fprintf(stderr, "we now try to start program %s\n", programName.c_str());
-    fprintf(stderr, "{\"ps\":\"%s\"}\n", programName.c_str());
     if (theRadio->dab_service(programName) < 0)
     {
         fprintf(stderr, "sorry  we cannot handle service %s\n",
                 programName.c_str());
         sighandler(9);
     }
+    fprintf(stderr, "{\"ps\":\"%s\"}\n", programName.c_str());
 }
 
 void listener(void)
@@ -651,13 +651,13 @@ void listener(void)
             ss >> serviceIdentifier;
             programName = theRadio->dab_getserviceName(serviceIdentifier);
             fprintf(stderr, "going to start program %s\n", programName.c_str());
-            fprintf(stderr, "{\"ps\":\"%s\"}\n", programName.c_str());
             if (theRadio->dab_service(programName) < 0)
             {
                 fprintf(stderr, "sorry  we cannot handle service %s\n",
                         programName.c_str());
                 sighandler(9);
             }
+            fprintf(stderr, "{\"ps\":\"%s\"}\n", programName.c_str());
         }
     }
 }
