@@ -84,7 +84,6 @@ void	agcThread(rtlsdrHandler *theStick) {
 	while (theStick->isRunning()) {
 	   usleep(1000 * 50); // wait 50 ms
 	   if (!theStick->isRunning()) { // we might stopped running while sleeping
-	       std:cerr << "RTL_SDR: running set to false while sleeping... break while!" << std::endl;
 	       break;
 	   }
 	   theStick->checkAGC();
@@ -218,7 +217,6 @@ int16_t	i;
 	}
 
 	running	= false;
-	std:cerr << "RTL_SDR: running set to false.. join thread!" << std::endl;
         if (agcHandle.joinable())
 	   agcHandle.join();
 
@@ -272,7 +270,6 @@ void	rtlsdrHandler::stopReader	(void) {
 	this -> rtlsdr_cancel_async (device);
 	workerHandle. join ();
 	running	= false;
-	std:cerr << "RTL_SDR: running set to false.. join thread!" << std::endl;
 	if (agcHandle.joinable())
 	   agcHandle.join();
 }
@@ -504,7 +501,7 @@ void rtlsdrHandler::checkAGC(void)
             if(currentGainCount > 0)
             {
                 setGain(currentGainCount - 1);
-                std::cerr << "RTL_SDR:" << "Decreased gain to " << (float) currentGain / 10 << std::endl;
+                //std::cerr << "RTL_SDR:" << "Decreased gain to " << (float) currentGain / 10 << std::endl;
             }
         }
         else
@@ -523,7 +520,7 @@ void rtlsdrHandler::checkAGC(void)
                 if(newMinValue >=0 && newMaxValue <= 255)
                 {
                     setGain(currentGainCount + 1);
-                    std::cerr << "RTL_SDR:" << "Increased gain to " << (float) currentGain / 10 << std::endl;
+                    //std::cerr << "RTL_SDR:" << "Increased gain to " << (float) currentGain / 10 << std::endl;
                 }
             }
         }
