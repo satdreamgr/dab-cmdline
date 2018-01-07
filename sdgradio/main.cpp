@@ -63,6 +63,8 @@ static std::atomic<bool> ensembleRecognized;
 
 static std::atomic<int32_t> lastFreqOff;
 static std::atomic<int16_t> lastSnr;
+static std::atomic<int16_t> lastFicQuality;
+static std::atomic<int16_t> lastMcsQuality;
 
 std::string programName = "Classic FM";
 int32_t serviceIdentifier = -1;
@@ -314,13 +316,21 @@ static void systemData(bool flag, int16_t snr, int32_t freqOff, void *ctx)
 static void fibQuality(int16_t q, void *ctx)
 {
     (void)ctx;
-    fprintf(stderr, "fic quality = %d\n", q);
+    if (abs(lastFicQuality - q) > 1)
+    {
+        fprintf(stderr, "{\"fic_quality\":\"%d\"}\n", q);
+        lastFicQuality = q;
+    }
 }
 
 static void mscQuality(int16_t fe, int16_t rsE, int16_t aacE, void *ctx)
 {
     (void)ctx;
-    fprintf(stderr, "msc quality = %d %d %d\n", fe, rsE, aacE);
+    if (abs(lastMcsQuality - fe) > 1)
+    {
+        fprintf(stderr, "{\"msc_quality\":\"%d %d %d\"}\n", fe, rsE, aacE);
+        lastMcsQuality = fe;
+    }
 }
 
 int main(int argc, char **argv)
