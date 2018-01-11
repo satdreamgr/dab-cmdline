@@ -293,7 +293,7 @@ std::vector<int> programSIds;
 static void programnameHandler(std::string s, int SId, void *userdata)
 {
     fprintf(stderr, "%s (%X) is part of the ensemble\n", s.c_str(), SId);
-    if (serviceIdentifier == -1)
+    if (serviceIdentifier == -1 && s.find("(data)") == -1)
     {
         serviceIdentifier = SId;
         fprintf(stderr, "{\"ps\":\"%s\"}\n", s.c_str());
