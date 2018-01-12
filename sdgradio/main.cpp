@@ -421,6 +421,12 @@ static void mscQuality(int16_t fe, int16_t rsE, int16_t aacE, void *ctx)
     }
 }
 
+static void motdataHandler(std::string f, int i, void *ctx)
+{
+    (void)ctx;
+    fprintf(stderr, "{\"mot\":\"%s %d\"}\n", f.c_str(), i);
+}
+
 int main(int argc, char **argv)
 {
     // Default values
@@ -577,7 +583,7 @@ int main(int argc, char **argv)
                      NULL, // no constellations
                      syncsignalHandler, systemData, ensemblenameHandler,
                      programnameHandler, fibQuality, pcmHandler, dataOut_Handler,
-                     bytesOut_Handler, programdataHandler, mscQuality, NULL);
+                     bytesOut_Handler, programdataHandler, mscQuality, motdataHandler, NULL);
     if (theRadio == NULL)
     {
         fprintf(stderr, "sorry, no radio available, fatal\n");
