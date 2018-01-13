@@ -424,7 +424,7 @@ static void mscQuality(int16_t fe, int16_t rsE, int16_t aacE, void *ctx)
 static void motdataHandler(std::string f, int i, void *ctx)
 {
     (void)ctx;
-    fprintf(stderr, "{\"mot\":\"%s %d\"}\n", f.c_str(), i);
+    fprintf(stderr, "{\"mot\":\"%s\",\"mot_type\":\"%d\"}\n", f.c_str(), i);
 }
 
 int main(int argc, char **argv)
