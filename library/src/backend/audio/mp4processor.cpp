@@ -236,6 +236,10 @@ stream_parms	streamParameters;
 	      if (soundOut != NULL) 
 	         (soundOut)((int16_t *)(&fileBuffer [0]),
 	                    aac_frame_length + 7, 0, false, NULL);
+	      handle_aacFrame (&outVector [au_start [i]],
+	                       aac_frame_length,
+	                       &streamParameters,
+	                       &err);
 #else
 	      handle_aacFrame (&outVector [au_start [i]],
 	                       aac_frame_length,
@@ -276,10 +280,12 @@ uint8_t theAudioUnit [2 * 960 + 10];	// sure, large enough
            my_padHandler. processPAD (buffer, count - 3, L1, L0);
         }
 
+#ifndef	AAC_OUT
 	int tmp = aacDecoder. MP42PCM (sp,
 	                               theAudioUnit,
 	                               frame_length);
 	*error	= tmp == 0;
+#endif
 }
 
 void	mp4Processor::show_frameErrors	(int s) {
