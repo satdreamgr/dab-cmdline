@@ -25,8 +25,8 @@
 #include	"mot-data.h"
 
 
-	mot_databuilder::mot_databuilder (void) {
-	my_motHandler	= new motHandler (NULL);
+	mot_databuilder::mot_databuilder (motdata_t motdataHandler) {
+	my_motHandler	= new motHandler (motdataHandler);
 }
 
 	mot_databuilder::~mot_databuilder (void) {
@@ -40,7 +40,7 @@ bool	segmentFlag	= getBits_1 (data, 2) != 0;
 bool	userAccessFlag	= getBits_1 (data, 3) != 0;
 uint8_t	groupType	= getBits_4 (data, 4);
 uint8_t	CI		= getBits_4 (data, 8);
-int16_t	next		= 16;		// bits
+int32_t	next		= 16;		// bits
 bool	lastSegment	= false;
 uint16_t segmentNumber	= 0;
 bool transportIdFlag	= false;
@@ -74,7 +74,7 @@ int16_t	i;
 	   next	+= lengthInd * 8;
 	}
 
-	int16_t		sizeinBits	=
+	int32_t		sizeinBits	=
 	              msc. size () - next - (crcFlag != 0 ? 16 : 0);
 	if (transportIdFlag) {
 	   std::vector<uint8_t> motVector;

@@ -82,7 +82,7 @@ audioBase	*soundOut	= NULL;
 tcpServer	tdcServer (8888);
 #endif
 
-std::string	programName		= "Classic FM";
+std::string	programName		= "Sky Radio";
 int32_t		serviceIdentifier	= -1;
 
 static void sighandler (int signum) {
@@ -141,6 +141,14 @@ static
 void	dataOut_Handler (std::string dynamicLabel, void *ctx) {
 	(void)ctx;
 	std::cerr << dynamicLabel << "\r";
+}
+//
+//	The function is called from the MOT handler, with
+//	as parameters the filename where the picture is stored
+//	d denotes the subtype of the picture 
+//	typedef void (*motdata_t)(std::string, int, void *);
+void	motdataHandler (std::string s, int d, void *ctx) {
+	(void)s; (void)d; (void)ctx;
 }
 
 //
@@ -413,7 +421,7 @@ bool	err;
 	                                bytesOut_Handler,
 	                                programdataHandler,
 	                                mscQuality,
-	                                NULL,		// MOT in PAD
+	                                motdataHandler,	// MOT in PAD
 	                                NULL		// Ctx
 	                               );
 	if (theRadio == NULL) {
