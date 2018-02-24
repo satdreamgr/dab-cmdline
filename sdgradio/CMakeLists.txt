@@ -59,6 +59,10 @@ endif ()
 if(DEFINED AAC_OUT)
   add_definitions(-DAAC_OUT)
 endif ()
+
+if(DEFINED NEON_AVAILABLE)
+  add_definitions(-DNEON_AVAILABLE)
+endif ()
 #########################################################################
 	find_package (PkgConfig)
 
@@ -298,6 +302,7 @@ endif ()
 	     ../library/src/ofdm/freq-interleaver.cpp
 	     ../library/src/backend/viterbi_768/viterbi-768.cpp
 	     ../library/src/backend/viterbi_768/spiral-no-sse.c
+	     ../library/src/backend/viterbi_768/spiral-neon.c
 	     ../library/src/backend/fic-handler.cpp
 	     ../library/src/backend/protection.cpp
 	     ../library/src/backend/eep-protection.cpp
