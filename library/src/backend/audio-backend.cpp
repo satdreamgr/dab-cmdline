@@ -69,22 +69,24 @@ int32_t i, j;
 	else
 	   protectionHandler	= new eep_protection (bitRate,
 	                                              protLevel);
-//
+
+	fprintf (stderr, "protection handler is %s\n",
+	                        shortForm ? "uep_protection" : "eep_protection");
 	if (dabModus == DAB) 
-	   our_dabProcessor = new mp2Processor (bitRate,
+	   our_backendBase = new mp2Processor (bitRate,
 	                                        soundOut,
 	                                        dataOut,
 	                                        mscQuality,
 	                                        motdata_Handler, ctx);
 	else
 	if (dabModus == DAB_PLUS) 
-	   our_dabProcessor = new mp4Processor (bitRate,
+	   our_backendBase = new mp4Processor (bitRate,
 	                                        soundOut,
 	                                        dataOut,
 	                                        mscQuality,
 	                                        motdata_Handler, ctx);
 	else		// cannot happen
-	   our_dabProcessor = new dabProcessor ();
+	   our_backendBase = new backendBase ();
 
 	fprintf (stderr, "we have now %s\n", dabModus == DAB_PLUS ? "DAB+" : "DAB");
 	tempX . resize (fragmentSize);
@@ -92,7 +94,7 @@ int32_t i, j;
 	nextOut			= 0;
 	for (i = 0; i < 20; i ++)
 	   theData [i] = new int16_t [fragmentSize];
-//
+
 	uint8_t	shiftRegister [9];
 	disperseVector. resize (bitRate * 24);
         memset (shiftRegister, 1, 9);
@@ -114,7 +116,7 @@ int16_t	i;
 	   threadHandle. join ();
 	}
 	delete protectionHandler;
-	delete our_dabProcessor;
+	delete our_backendBase;
 	for (i = 0; i < 16; i ++) 
 	   delete[]  interleaveData [i];
 	delete [] interleaveData;
@@ -160,21 +162,21 @@ int16_t i;
         }
 
 	protectionHandler -> deconvolve (tempX. data (),
-                                         fragmentSize,
-                                         outV. data ());
+	                                 fragmentSize,
+	                                  outV. data ());
 //
 //      and the energy dispersal
 	for (i = 0; i < bitRate * 24; i ++)
 	   outV [i] ^= disperseVector [i];
 
-        our_dabProcessor -> addtoFrame (outV. data ());
+	our_backendBase -> addtoFrame (outV. data ());
 }
 
 void    audioBackend::run       (void) {
 
         while (running. load ()) {
            while (!usedSlots. tryAcquire (200))
-              if (!running)
+              if (!running. load ())
                  return;
            processSegment (theData [nextOut]);
         }

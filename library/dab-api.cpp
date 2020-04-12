@@ -23,12 +23,10 @@
 //
 #include	"dab-api.h"
 #include	"ringbuffer.h"
-#include	"dab-class.h"
+#include	"dab-processor.h"
 
 void	*dabInit   (deviceHandler       *theDevice,
 	            uint8_t             Mode,
-	            RingBuffer<std::complex<float>> *spectrumBuffer,
-	            RingBuffer<std::complex<float>> *iqBuffer,
 	            syncsignal_t        syncsignal_Handler,
 	            systemdata_t        systemdata_Handler,
 	            ensemblename_t      ensemblename_Handler,
@@ -40,55 +38,83 @@ void	*dabInit   (deviceHandler       *theDevice,
 	            programdata_t       programdata_Handler,
 	            programQuality_t    programquality_Handler,
 	            motdata_t		motdata_Handler,
+	            RingBuffer<std::complex<float>> *spectrumBuffer,
+	            RingBuffer<std::complex<float>> *iqBuffer,
 	            void                *userData) {
-dabClass *theClass = new dabClass (theDevice,
-	                           Mode,
-	                           spectrumBuffer,
-	                           iqBuffer,
-	                           syncsignal_Handler,
-	                           systemdata_Handler,
-	                           ensemblename_Handler,
-	                           programname_Handler,
-	                           fib_quality_Handler,
-	                           audioOut_Handler,
-	                           dataOut_Handler,
-	                           bytesOut_Handler,
-	                           programdata_Handler,
-	                           programquality_Handler,
-	                           motdata_Handler,
-	                           userData);
+dabProcessor *theClass = new dabProcessor (theDevice,
+	                                   Mode,
+	                                   syncsignal_Handler,
+	                                   systemdata_Handler,
+	                                   ensemblename_Handler,
+	                                   programname_Handler,
+	                                   fib_quality_Handler,
+	                                   audioOut_Handler,
+	                                   bytesOut_Handler,
+	                                   dataOut_Handler,
+	                                   programdata_Handler,
+	                                   programquality_Handler,
+	                                   motdata_Handler,
+	                                   spectrumBuffer,
+	                                   iqBuffer,
+	                                   userData);
 	return (void *)theClass;
 }
 
 void	dabExit		(void *Handle) {
-	delete (dabClass *)Handle;
+	delete (dabProcessor *)Handle;
 }
 
 void	dabStartProcessing (void *Handle) {
-	((dabClass *)Handle) -> startProcessing ();
+	((dabProcessor *)Handle) -> start ();
 }
 
-void	dabReset           (void *Handle) {
-	((dabClass *)Handle) -> reset ();
+void	dabReset	(void *Handle) {
+	((dabProcessor *)Handle) -> reset ();
 }
 
-
-void	dabStop           (void *Handle) {
-	((dabClass *)Handle) -> stop ();
+void	dabStop		(void *Handle) {
+	((dabProcessor *)Handle) -> stop ();
 }
 
+void	dabReset_msc	(void *Handle) {
+	((dabProcessor *)Handle) -> reset_msc ();
+}
 
-int16_t	dabService     (const char* c_s, void *Handle) {
+bool	is_audioService	(void *Handle, const char *name) {
+	return ((dabProcessor *)Handle) -> kindofService (std::string (name)) ==
+	                               AUDIO_SERVICE;
+}
+
+bool	is_dataService	(void *Handle, const char *name) {
+	return ((dabProcessor *)Handle) -> kindofService (std::string (name)) ==
+	                               PACKET_SERVICE;
+}
+
+void    dataforAudioService     (void *Handle,
+	                         const char *name,
+	                         audiodata *d, int o) {
+	((dabProcessor *)Handle) -> dataforAudioService (name, d, o);
+}
+
+void    dataforDataService      (void *Handle,
+	                         const char *name, packetdata *pd, int o) {
+	((dabProcessor *)Handle) -> dataforDataService (name, pd, o);
+}
+
+void    set_audioChannel        (void *Handle, audiodata *ad) {
+	((dabProcessor *)Handle) -> set_audioChannel (ad);
+}
+
+void    set_dataChannel         (void *Handle, packetdata *pd) {
+	((dabProcessor *)Handle) -> set_dataChannel (pd);
+}
+
+int32_t dab_getSId      (void *Handle, const char* c_s) {
 	std::string s(c_s);
-	return ((dabClass *)Handle) -> dab_service (s);
-}
-	
-int32_t dab_getSId      (const char* c_s, void * Handle) {
-	std::string s(c_s);
-	return ((dabClass *)Handle) -> dab_getSId (s);
+	return ((dabProcessor *)Handle) -> get_SId (s);
 }
 
-std::string dab_getserviceName (int32_t SId, void *Handle) {
-	return ((dabClass *)Handle) -> dab_getserviceName (SId);
+std::string dab_getserviceName (void *Handle, int32_t SId) {
+	return ((dabProcessor *)Handle) -> get_serviceName (SId);
 }
 

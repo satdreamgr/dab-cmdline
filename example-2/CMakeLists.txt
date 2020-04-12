@@ -39,9 +39,19 @@ if(DEFINED SDRPLAY)
    set(objectName dab-sdrplay-2)
 endif ()
 
+if(DEFINED SDRPLAY_V3)
+   set(SDRPLAY_V3 true)
+   set(objectName dab-sdrplay-2)
+endif ()
+
 if(DEFINED RTLSDR)
    set(RTLSDR true)
    set(objectName dab-rtlsdr-2)
+endif ()
+
+if(DEFINED HACKRF)
+   set(HACKRF true)
+   set(objectName dab-hackrf-2)
 endif ()
 
 if(DEFINED WAVFILES)
@@ -54,6 +64,11 @@ if(DEFINED RAWFILES)
    set(objectName dab-raw-2)
 endif ()
 
+if(DEFINED LIMESDR)
+   set(LIMESDR true)
+   set(objectName dab-lime-2)
+endif ()
+
 if(DEFINED RTL_TCP)
    set(RTL_TCP true)
    set(objectName dab-rtl_tcp-2)
@@ -63,6 +78,7 @@ if (DEFINED_SERVER)
     add_definitions(-DHAVE_SERVER)
 endif ()
 
+#add_definitions (-D__THREADED_DECODING)
 #########################################################################
 	find_package (PkgConfig)
 
@@ -139,6 +155,67 @@ endif ()
 	 add_definitions (-DHAVE_SDRPLAY)
 	endif (SDRPLAY)
 
+	if (SDRPLAY_V3)
+	   find_path (SDRPLAYLIB_INCLUDE_DIR
+                      NAMES sdrplay_api.h
+                      PATHS
+                      /usr/local/include/
+	   )
+           include_directories (${SDRPLAYLIB_INCLUDE_DIR})
+
+           find_library (SDRPLAYLIB sdrplay_api)
+           if(NOT(SDRPLAYLIB))
+              message(FATAL_ERROR "please install -lsdrplay_api")
+           else(NOT(SDRPLAYLIB))
+              list (APPEND extraLibs ${SDRPLAYLIB})
+           endif(NOT(SDRPLAYLIB))
+
+	   include_directories (
+	     ../devices/sdrplay-handler-v3
+	   )
+
+	   set ($(objectName)_HDRS
+	        ${${objectName}_HDRS}
+	        ../devices/sdrplay-handler-v3/sdrplay-handler-v3.h
+	        ../devices/sdrplay-handler-v3/sdrplay-controller.h
+           )
+
+	   set (${objectName}_SRCS
+	        ${${objectName}_SRCS}
+	        ../devices/sdrplay-handler-v3/sdrplay-handler-v3.cpp
+	        ../devices/sdrplay-handler-v3/sdrplay-controller.cpp
+	   )
+
+	   add_definitions (-DHAVE_SDRPLAY_V3)
+	endif (SDRPLAY_V3)
+
+	if (LIMESDR)
+           find_library (LIMELIB LimeSuite)
+           if(NOT(LIMELIB))
+              message(FATAL_ERROR "please install LimeSuite")
+           else(NOT(LIMELIB))
+              list (APPEND extraLibs ${LIMELIB})
+           endif(NOT(LIMELIB))
+
+	   include_directories (
+	     ../devices/lime-handler
+	   )
+
+	   set ($(objectName)_HDRS
+	        ${${objectName}_HDRS}
+	        ../devices/lime-handler/LMS7002M_parameters.h
+	        ../devices/lime-handler/LimeSuite.h
+	        ../devices/lime-handler/lime-handler.h
+           )
+
+	   set (${objectName}_SRCS
+	        ${${objectName}_SRCS}
+	        ../devices/lime-handler/lime-handler.cpp
+	   )
+
+	 add_definitions (-DHAVE_LIME)
+	endif (LIMESDR)
+
 	if (AIRSPY)
            find_package(LibAIRSPY)
            if (NOT LIBAIRSPY_FOUND)
@@ -187,6 +264,39 @@ endif ()
 
 	   add_definitions (-DHAVE_RTLSDR)
 	endif()
+
+	if (HACKRF)
+	   find_path (HACKLIB_INCLUDE_DIR
+                      NAMES hackrf.h
+                      PATHS
+	              ../devices/hackrf-handler/libhackrf/
+                       /usr/local/include/
+	   )
+           include_directories (${HACKLIB_INCLUDE_DIR})
+
+           find_library (HACKLIB hackrf)
+           if(NOT(HACKLIB))
+              message(FATAL_ERROR "please install -lhackrf")
+           else(NOT(HACKLIB))
+              list (APPEND extraLibs ${HACKLIB})
+           endif(NOT(HACKLIB))
+
+	   include_directories (
+	     ../devices/hackrf-handler
+	   )
+
+	   set ($(objectName)_HDRS
+	        ${${objectName}_HDRS}
+	        ../devices/hackrf-handler/hackrf-handler.h
+           )
+
+	   set (${objectName}_SRCS
+	        ${${objectName}_SRCS}
+	        ../devices/hackrf-handler/hackrf-handler.cpp
+	   )
+
+	 add_definitions (-DHAVE_HACKRF)
+	endif (HACKRF)
 
         find_package(Portaudio)
         if (NOT PORTAUDIO_FOUND)
@@ -261,36 +371,35 @@ endif ()
 	           ../library/includes
 	           ../library/includes/ofdm
 	           ../library/includes/backend
-	           ../library/includes/backend/viterbi_768
 	           ../library/includes/backend/audio
 	           ../library/includes/backend/data
+	           ../library/includes/backend/data/mot
 	           ../library/includes/backend/data/journaline
-	           ../library/includes/various
+	           ../library/includes/support
 	           /usr/include/
 	)
 
 	set (${objectName}_HDRS
 	     ${${objectName}_HDRS}
 	     ./ringbuffer.h
-	     ./band-handler.h
 	     ./audio-base.h
 	     ./audiosink.h
 	     ./filesink.h
 	     ./newconverter.h
 	     ./server-thread/tcp-server.h
+	     ../dab-api.h
 	     ../devices/device-handler.h
-	     ../library/includes/dab-class.h
 	     ../library/includes/dab-constants.h
-	     ../library/includes/ofdm/ofdm-processor.h
+	     ../library/includes/dab-processor.h
 	     ../library/includes/ofdm/phasereference.h
 	     ../library/includes/ofdm/phasetable.h
 	     ../library/includes/ofdm/freq-interleaver.h
-	     ../library/includes/backend/viterbi_768/viterbi-768.h
-	     ../library/includes/backend/protection.h
-	     ../library/includes/backend/uep-protection.h
-	     ../library/includes/backend/eep-protection.h
+	     ../library/includes/ofdm/timesyncer.h
+	     ../library/includes/ofdm/fic-handler.h
+	     ../library/includes/ofdm/fib-processor.cpp
+	     ../library/includes/ofdm/sample-reader.h
 	     ../library/includes/backend/firecode-checker.h
-	     ../library/includes/backend/dab-processor.h
+	     ../library/includes/backend/backend-base.h
 	     ../library/includes/backend/charsets.h
 	     ../library/includes/backend/galois.h
 	     ../library/includes/backend/reed-solomon.h
@@ -301,15 +410,22 @@ endif ()
 	     ../library/includes/backend/audio/faad-decoder.h
 	     ../library/includes/backend/audio/mp4processor.h 
 	     ../library/includes/backend/audio/mp2processor.h 
-	     ../library/includes/backend/data/mot-databuilder.h 
 	     ../library/includes/backend/data/virtual-datahandler.h 
 	     ../library/includes/backend/data/tdc-datahandler.h 
 	     ../library/includes/backend/data/pad-handler.h 
-	     ../library/includes/backend/data/mot-data.h 
+	     ../library/includes/backend/data/mot/mot-handler.h 
+	     ../library/includes/backend/data/mot/mot-dir.h 
+	     ../library/includes/backend/data/mot/mot-object.h 
 	     ../library/includes/backend/data/data-processor.h
-	     ../library/includes/various/fft_handler.h
-	     ../library/includes/various/dab-params.h
-	     ../library/includes/various/tii_table.h
+         ../library/includes/support/band-handler.h
+	     ../library/includes/support/viterbi-handler.h
+	     ../library/includes/support/protTables.h
+	     ../library/includes/support/protection.h
+	     ../library/includes/support/uep-protection.h
+	     ../library/includes/support/eep-protection.h
+	     ../library/includes/support/fft_handler.h
+	     ../library/includes/support/dab-params.h
+	     ../library/includes/support/tii_table.h
 	)
 
 	set (${objectName}_SRCS
@@ -319,25 +435,20 @@ endif ()
 	     ./audiosink.cpp
 	     ./filesink.cpp
 	     ./newconverter.cpp
-	     ./band-handler.cpp
 	     ./server-thread/tcp-server.cpp
 	     ../devices/device-handler.cpp
-	     ../library/src/dab-class.cpp
-	     ../library/src/ofdm/ofdm-processor.cpp
+	     ../library/dab-api.cpp
+	     ../library/src/dab-processor.cpp
 	     ../library/src/ofdm/ofdm-decoder.cpp
 	     ../library/src/ofdm/phasereference.cpp
 	     ../library/src/ofdm/phasetable.cpp
 	     ../library/src/ofdm/freq-interleaver.cpp
-	     ../library/src/backend/viterbi_768/viterbi-768.cpp
-	     ../library/src/backend/viterbi_768/spiral-no-sse.c
-	     ../library/src/backend/fic-handler.cpp
-	     ../library/src/backend/protection.cpp
-	     ../library/src/backend/eep-protection.cpp
-	     ../library/src/backend/uep-protection.cpp
-	     ../library/src/backend/fib-processor.cpp
+	     ../library/src/ofdm/timesyncer.cpp
+	     ../library/src/ofdm/sample-reader.cpp
+	     ../library/src/ofdm/fib-processor.cpp
+	     ../library/src/ofdm/fic-handler.cpp
 	     ../library/src/backend/firecode-checker.cpp
-	     ../library/src/backend/dab-processor.cpp
-	     ../library/src/backend/protTables.cpp
+	     ../library/src/backend/backend-base.cpp
 	     ../library/src/backend/charsets.cpp
 	     ../library/src/backend/galois.cpp
 	     ../library/src/backend/reed-solomon.cpp
@@ -347,15 +458,22 @@ endif ()
 	     ../library/src/backend/data-backend.cpp
 	     ../library/src/backend/audio/mp4processor.cpp 
 	     ../library/src/backend/audio/mp2processor.cpp 
-	     ../library/src/backend/data/mot-databuilder.cpp 
 	     ../library/src/backend/data/virtual-datahandler.cpp 
 	     ../library/src/backend/data/tdc-datahandler.cpp 
 	     ../library/src/backend/data/pad-handler.cpp 
-	     ../library/src/backend/data/mot-data.cpp 
+	     ../library/src/backend/data/mot/mot-handler.cpp 
+	     ../library/src/backend/data/mot/mot-dir.cpp 
+	     ../library/src/backend/data/mot/mot-object.cpp 
 	     ../library/src/backend/data/data-processor.cpp
-	     ../library/src/various/fft_handler.cpp
-	     ../library/src/various/dab-params.cpp
-	     ../library/src/various/tii_table.cpp
+         ../library/src/support/band-handler.cpp
+	     ../library/src/support/viterbi-handler.cpp
+	     ../library/src/support/protTables.cpp
+	     ../library/src/support/protection.cpp
+	     ../library/src/support/eep-protection.cpp
+	     ../library/src/support/uep-protection.cpp
+	     ../library/src/support/fft_handler.cpp
+	     ../library/src/support/dab-params.cpp
+	     ../library/src/support/tii_table.cpp
 	)
 
 #

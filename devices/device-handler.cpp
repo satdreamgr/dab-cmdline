@@ -32,15 +32,7 @@
 	deviceHandler::~deviceHandler (void) {
 }
 
-void	deviceHandler::setVFOFrequency (int32_t f) {
-	lastFrequency = f;
-}
-
-int32_t	deviceHandler::getVFOFrequency	(void) {
-	return lastFrequency;
-}
-
-bool	deviceHandler::restartReader	(void) {
+bool	deviceHandler::restartReader	(int32_t) {
 	return true;
 }
 
@@ -82,5 +74,13 @@ void	deviceHandler::set_autogain	(bool b) {
 
 void	deviceHandler::set_KhzOffset	(int32_t o) {
 	vfoOffset = o;
+}
+
+void	deviceHandler::set_ifgainReduction  (int x) {
+	(void)x;
+}
+
+void	deviceHandler::set_lnaState	(int x) {
+	(void)x;
 }
 

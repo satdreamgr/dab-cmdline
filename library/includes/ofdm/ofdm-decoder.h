@@ -24,55 +24,28 @@
 
 #include	<stdint.h>
 #include	<vector>
-#include	<thread>
-#include	<mutex>
-#include	<condition_variable>
 #include	<atomic>
 #include	"dab-constants.h"
 #include	"ringbuffer.h"
 #include	"phasetable.h"
 #include	"freq-interleaver.h"
-#include	"semaphore.h"
+#include	"fft_handler.h"
 
-class	ficHandler;
-class	mscHandler;
 class	dabParams;
-class	fft_handler;
 
 class	ofdmDecoder {
 public:
-		ofdmDecoder		(dabParams	*,
-	                                 fft_handler	*,
-                                         RingBuffer<std::complex<float>> *,
-	                                 ficHandler	*,
-	                                 mscHandler	*);
+		ofdmDecoder		(uint8_t	dabMode,
+                                         RingBuffer<std::complex<float>> *);
 		~ofdmDecoder		(void);
 	void	processBlock_0		(std::complex<float> *);
-	void	decodeblock		(std::complex<float> *, int32_t n);
-	int16_t	get_snr			(void);
-	void	stop			(void);
-	void	start			(void);
+	void	decode		(std::complex<float> *, int32_t n, int16_t *);
 private:
-	fft_handler	*my_fftHandler;
-	int16_t		get_snr		(std::complex<float> *);
-	dabParams	*params;
+	dabParams	params;
+	fft_handler	my_fftHandler;
+	interLeaver	myMapper;
         RingBuffer<std::complex<float>> *iqBuffer;
-	ficHandler	*my_ficHandler;
-	mscHandler	*my_mscHandler;
-	Semaphore	bufferSpace;
-	std::thread	threadHandle;
-	std::mutex	myMutex;
-	std::mutex	ourMutex;
-	std::condition_variable	Locker;
-	void		run		(void);
-	std::atomic<bool>	running;
-	std::complex<float>	**command;
-	int16_t		amount;
 	int		cnt;
-	int16_t		currentBlock;
-	void		processBlock_0		(void);
-	void		decodeFICblock		(int32_t n);
-	void		decodeMscblock		(int32_t n);
 	int32_t		T_s;
 	int32_t		T_u;
 	int32_t		T_g;
@@ -80,11 +53,8 @@ private:
 	int32_t		nrBlocks;
 	int16_t		getMiddle	(void);
 	std::vector <complex<float> >	phaseReference;
-	std::vector<int16_t>            ibits;
 	std::complex<float>	*fft_buffer;
-	interLeaver	myMapper;
 	int32_t		blockIndex;
-	float		current_snr;
 };
 
 #endif

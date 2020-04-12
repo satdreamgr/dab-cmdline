@@ -31,7 +31,7 @@
 #include	<vector>
 #include	"audiosink.h"
 #include	"dab-api.h"
-#include	"band-handler.h"
+#include	"includes/support/band-handler.h"
 #ifdef	HAVE_SDRPLAY
 #include	"sdrplay-handler.h"
 #elif	HAVE_AIRSPY
@@ -171,7 +171,12 @@ uint8_t		theMode		= 1;
 std::string	theChannel	= "11C";
 uint8_t		theBand		= BAND_III;
 int16_t		ppmCorrection	= 0;
+#ifndef	HAVE_SDRPLAY
 int		theGain		= 35;	// scale = 0 .. 100
+#else
+int16_t		theGain		= 30;
+int16_t		lnaState	= 2;
+#endif
 std::string	soundChannel	= "default";
 int16_t		latency		= 10;
 bool		autogain	= false;
@@ -211,21 +216,30 @@ deviceHandler	*theDevice;
 	      case 'p':
 	         ppmCorrection	= atoi (optarg);
 	         break;
-
+#ifdef	HAVE_SDRPLAY
 	      case 'G':
 	         theGain	= atoi (optarg);
 	         break;
 
+	      case 'L':
+	         lnaState	= atoi (optarg);
+	         break;
+#else
+	      case 'G':
+	         theGain	= atoi (optarg);
+	         break;
+
+	      case 'L':
+	         latency	= atoi (optarg);
+	         break;
+
+#endif
 	      case 'Q':
 	         autogain	= true;
 	         break;
 
 	      case 'A':
 	         soundChannel	= optarg;
-	         break;
-
-	      case 'L':
-	         latency	= atoi (optarg);
 	         break;
 
 	      case 'S': {
@@ -254,13 +268,14 @@ deviceHandler	*theDevice;
 	   theDevice	= new sdrplayHandler (frequency,
 	                                      ppmCorrection,
 	                                      theGain,
+	                                      lnaState,
 	                                      autogain,
 	                                      0,
 	                                      0);
 #elif	HAVE_AIRSPY
 	   theDevice	= new airspyHandler (frequency,
 	                                     ppmCorrection,
-	                                     theGain);
+	                                     theGain, false);
 #elif	HAVE_RTLSDR
 	   theDevice	= new rtlsdrHandler (frequency,
 	                                     ppmCorrection,
@@ -284,8 +299,6 @@ deviceHandler	*theDevice;
 //	and a sound device
 	theRadio	= dabInit (theDevice,
 	                           theMode,
-	                           NULL,		// no spectrum shown
-	                           NULL,		// no constellations
 	                           syncsignalHandler,
 	                           systemData,
 	                           ensemblenameHandler,
@@ -297,6 +310,8 @@ deviceHandler	*theDevice;
 	                           programdataHandler,
 	                           mscQuality,
 	                           NULL,
+	                           NULL,
+	                           NULL,
 	                           NULL
 	                          );
 	if (theRadio == NULL) {
@@ -307,8 +322,7 @@ deviceHandler	*theDevice;
 	theDevice	-> setGain (theGain);
 	if (autogain)
 	   theDevice	-> set_autogain (autogain);
-	theDevice	-> setVFOFrequency (frequency);
-	theDevice	-> restartReader ();
+	theDevice	-> restartReader (frequency);
 //
 //	The device should be working right now
 
@@ -349,11 +363,21 @@ deviceHandler	*theDevice;
 
 	run. store (true);
 	if (serviceId != -1) 
-	   programName = dab_getserviceName (serviceId, theRadio);
-	fprintf (stderr, "we try to start program %s\n", programName. c_str ());
-	if (dabService (programName.c_str(), theRadio) < 0) {
-	   fprintf (stderr, "sorry  we cannot handle service %s\n", 
-	                                             programName. c_str ());
+	   programName = dab_getserviceName (theRadio, serviceId);
+
+	std::cerr << "we try to start program " <<
+                                                 programName << "\n";
+	if (!is_audioService (theRadio, programName. c_str ())) {
+	   std::cerr << "sorry  we cannot handle service " <<
+                                                 programName << "\n";
+	   run. store (false);
+	}
+
+	audiodata ad;
+	dataforAudioService (theRadio, programName. c_str (), &ad, 0);
+	if (!ad. defined) {
+	   std::cerr << "sorry  we cannot handle service " <<
+                                                 programName << "\n";
 	   run. store (false);
 	}
 
