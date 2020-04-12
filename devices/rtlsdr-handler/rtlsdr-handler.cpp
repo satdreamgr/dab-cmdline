@@ -65,7 +65,7 @@ rtlsdrHandler	*theStick	= (rtlsdrHandler *)ctx;
 	      maxValue = buf[i];
 	}
 
-	//(void) theStick -> setMinMaxValue(minValue, maxValue);
+	(void) theStick -> setMinMaxValue(minValue, maxValue);
 }
 //
 //	for handling the events in libusb, we need a controlthread
@@ -79,7 +79,7 @@ void	controlThread (rtlsdrHandler *theStick) {
 	                          READLEN_DEFAULT);
 }
 
-/**void	agcThread(rtlsdrHandler *theStick) {
+void	agcThread(rtlsdrHandler *theStick) {
 	while (theStick->isRunning()) {
 	   usleep(1000 * 50); // wait 50 ms
 	   if (!theStick->isRunning()) { // we might stopped running while sleeping
@@ -87,7 +87,7 @@ void	controlThread (rtlsdrHandler *theStick) {
 	   }
 	   theStick->checkAGC();
 	}
-}**/
+}
 
 //
 //	Our wrapper is a simple classs
@@ -191,7 +191,7 @@ int16_t	i;
 
 	r			= this -> rtlsdr_get_sample_rate (device);
 	fprintf (stderr, "samplerate set to %d\n", r);
-	rtlsdr_set_tuner_gain_mode (device, 0);
+	//rtlsdr_set_tuner_gain_mode (device, 0);
 
 	gainsCount	= rtlsdr_get_tuner_gains (device, NULL);
 	fprintf (stderr, "Supported gain values (%d): ", gainsCount);
@@ -200,16 +200,19 @@ int16_t	i;
 	for (i = 0; i < gainsCount; i ++)
 	   fprintf (stderr, "%d.%d ", gains [i] / 10, gains [i] % 10);
 	fprintf (stderr, "\n");
-	theGain		= gain;
+
+	theGain = gain * gainsCount / 100;
+	currentGainCount = theGain;
+
 	if (ppmCorrection != 0)
 	   rtlsdr_set_freq_correction (device, ppmCorrection);
-	if (autogain)
-	   rtlsdr_set_agc_mode (device, 1);
+	//if (autogain)
+	//   rtlsdr_set_agc_mode (device, 1);
 	(void)(this -> rtlsdr_set_center_freq (device, frequency));
-	fprintf (stderr, "effective gain: gain %d.%d\n",
-	                              gains [theGain * gainsCount / 100] / 10,
-	                              gains [theGain * gainsCount / 100] % 10);
-	rtlsdr_set_tuner_gain (device, gains [theGain * gainsCount / 100]);
+	//fprintf (stderr, "effective gain: gain %d.%d\n",
+	//                              gains [theGain * gainsCount / 100] / 10,
+	//                              gains [theGain * gainsCount / 100] % 10);
+	//rtlsdr_set_tuner_gain (device, gains [theGain * gainsCount / 100]);
 
 	if ( this	-> deviceOptions && rtlsdr_set_opt_string )
 		rtlsdr_set_opt_string(device, deviceOptions, 1);
@@ -217,15 +220,15 @@ int16_t	i;
 	_I_Buffer		= new RingBuffer<uint8_t>(1024 * 1024);
 
 	// Always use manual gain, the AGC is implemented in software
-	//rtlsdr_set_tuner_gain_mode(device, 1);
+	rtlsdr_set_tuner_gain_mode(device, 1);
 
-	//setGain(currentGainCount);
+	setGain(currentGainCount);
 
 	// Disable hardware AGC by default
-	//setHwAgc(autogain);
+	setHwAgc(autogain);
 
 	// Enable AGC by default
-	//setAgc(true);
+	setAgc(true);
 }
 
 	rtlsdrHandler::~rtlsdrHandler	(void) {
@@ -235,8 +238,8 @@ int16_t	i;
 	}
 
 	running	= false;
-	//if (agcHandle.joinable())
-	//	agcHandle.join();
+	if (agcHandle.joinable())
+		agcHandle.join();
 
 	if (open)
 	   this -> rtlsdr_close (device);
@@ -269,13 +272,15 @@ int32_t	r;
 	this	-> frequency	= frequency;
         (void)(this -> rtlsdr_set_center_freq (device, frequency));
 	workerHandle = std::thread (controlThread, this);
-	rtlsdr_set_tuner_gain (device, gains [theGain * gainsCount / 100]);
-	if (autogain)
-	   rtlsdr_set_agc_mode (device, 1);
+	setGain(currentGainCount);
+	setHwAgc(autogain);
+	//rtlsdr_set_tuner_gain (device, gains [theGain * gainsCount / 100]);
+	//if (autogain)
+	//   rtlsdr_set_agc_mode (device, 1);
 	if ( this	-> deviceOptions && rtlsdr_set_opt_string )
 		rtlsdr_set_opt_string(device, deviceOptions, 1);
 	running	= true;
-	//agcHandle = std::thread (agcThread, this);
+	agcHandle = std::thread (agcThread, this);
 	return true;
 }
 
@@ -286,11 +291,10 @@ void	rtlsdrHandler::stopReader	(void) {
 	this -> rtlsdr_cancel_async (device);
 	workerHandle. join ();
 	running	= false;
-	//if (agcHandle.joinable())
-	//	agcHandle.join();
+	if (agcHandle.joinable())
+		agcHandle.join();
 }
-
-/**
+//
 //	when selecting with an integer in the range 0 .. 100
 //	first find the table value
 void	rtlsdrHandler::setGain	(int32_t g) {
@@ -315,7 +319,7 @@ bool	rtlsdrHandler::has_autogain	(void) {
 void	rtlsdrHandler::set_autogain	(bool b) {
 	rtlsdr_set_tuner_gain_mode (device, b);
 	rtlsdr_set_tuner_gain (device, theGain);
-}**/
+}
 
 //
 //	we only have 8 bits, so rather than doing a float division to get
@@ -515,7 +519,7 @@ int16_t	rtlsdrHandler::bitDepth	(void) {
 	return 8;
 }
 
-/**void rtlsdrHandler::setMinMaxValue(uint8_t minValue, uint8_t maxValue) {
+void rtlsdrHandler::setMinMaxValue(uint8_t minValue, uint8_t maxValue) {
 	this->minValue = minValue;
 	this->maxValue = maxValue;
 }
@@ -582,4 +586,4 @@ void rtlsdrHandler::setAgc(bool AGC) {
 	   isAGC = false;
 	   setGain(currentGainCount);
 	}
-}**/
+}

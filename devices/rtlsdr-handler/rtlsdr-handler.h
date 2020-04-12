@@ -82,6 +82,15 @@ public:
 	int16_t		maxGain		(void);
 	int16_t		bitDepth	(void);
 //
+	void            setGain         (int32_t);
+	bool            has_autogain    (void);
+	void            set_autogain    (bool);
+	void            setMinMaxValue  (uint8_t, uint8_t);
+	void            checkAGC        (void);
+	bool            isRunning       (void);
+	void            setAgc          (bool);
+	void            setHwAgc        (bool);
+//
 //	These need to be visible for the separate usb handling thread
 	RingBuffer<uint8_t>	*_I_Buffer;
 	pfnrtlsdr_read_async	rtlsdr_read_async;
