@@ -23,6 +23,7 @@
  *	for handling a single MOT message with a given transportId
  */
 #include	"mot-object.h"
+#include	<cstring>
 
 	   motObject::motObject (motdata_t	motdataHandler,
 	                         bool		dirElement,
@@ -165,10 +166,13 @@ std::vector<uint8_t> result;
 	   realName = "no name";
         else
 	   realName = name;
-//	FILE * temp = fopen (realName. c_str (), "w");
-//	fwrite (result.data (), 1, result. size (), temp);
+	std::string tmpName = std::tmpnam(realName. c_str ());
+	FILE * temp = fopen (tmpName. c_str(), "w");
+	if (temp == NULL) return;
+	fwrite (result.data (), 1, result. size (), temp);
+	fclose(temp);
 	if (motdataHandler != nullptr)
-	   motdataHandler (realName, contentsubType, ctx);
+	   motdataHandler (tmpName, contentsubType, ctx);
 }
 
 int     motObject::get_headerSize       (void) {
