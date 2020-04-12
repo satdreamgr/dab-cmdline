@@ -23,10 +23,11 @@
  *	E X A M P L E  P R O G R A M
  *	for the DAB-library
  */
-#include "band-handler.h"
-#include "dab-class.h"
+#include "includes/support/band-handler.h"
+#include "dab-api.h"
 #include <cstdio>
 #include <getopt.h>
+#include <vector>
 #include <iostream>
 #include <signal.h>
 #include <unistd.h>
@@ -53,7 +54,7 @@ void listener(void);
 //	to be accessed from global contexts
 static std::atomic<bool> run;
 
-static dabClass *theRadio = NULL;
+static void *theRadio = NULL;
 
 static std::atomic<bool> timeSynced;
 
@@ -293,7 +294,7 @@ std::vector<int> programSIds;
 static void programnameHandler(std::string s, int SId, void *userdata)
 {
     fprintf(stderr, "%s (%X) is part of the ensemble\n", s.c_str(), SId);
-    if (serviceIdentifier == -1 && s.find("(data)") == -1)
+    if (serviceIdentifier == -1 && s.find("(data)") == std::string::npos)
     {
         serviceIdentifier = SId;
         fprintf(stderr, "{\"ps\":\"%s\"}\n", s.c_str());
@@ -575,15 +576,26 @@ int main(int argc, char **argv)
         fprintf(stderr, "allocating device failed (%d), fatal\n", e);
         exit(32);
     }
-    //
-    //	and with a sound device we can create a "backend"
-    theRadio =
-        new dabClass(theDevice, theMode,
-                     NULL, // no spectrum shown
-                     NULL, // no constellations
-                     syncsignalHandler, systemData, ensemblenameHandler,
-                     programnameHandler, fibQuality, pcmHandler, dataOut_Handler,
-                     bytesOut_Handler, programdataHandler, mscQuality, motdataHandler, NULL);
+
+    // and with a sound device we can create a "backend"
+    theRadio = (void *)dabInit (theDevice,
+				theMode,
+				syncsignalHandler,
+				systemData,
+				ensemblenameHandler,
+				programnameHandler,
+				fibQuality,
+				pcmHandler,
+				dataOut_Handler,
+				bytesOut_Handler,
+				programdataHandler,
+				mscQuality,
+				motdataHandler,
+				NULL,		// no spectrum shown
+				NULL,		// no constellations
+				NULL		//ctx
+				);
+
     if (theRadio == NULL)
     {
         fprintf(stderr, "sorry, no radio available, fatal\n");
@@ -595,14 +607,13 @@ int main(int argc, char **argv)
     //    theDevice->set_autogain(autogain);
     if (khzOffset)
         theDevice->set_KhzOffset(khzOffset);
-    theDevice->setVFOFrequency(frequency);
-    theDevice->restartReader();
+    theDevice->restartReader(frequency);
     //
     //	The device should be working right now
 
     timesyncSet.store(false);
     ensembleRecognized.store(false);
-    theRadio->startProcessing();
+    dabStartProcessing (theRadio);
 
     int timeOut = 0;
     while (!timesyncSet.load() && (++timeOut < waitingTime))
@@ -613,8 +624,8 @@ int main(int argc, char **argv)
         fprintf(stderr, "There does not seem to be a DAB signal here\n");
         theDevice->stopReader();
         sleep(1);
-        theRadio->stop();
-        delete theRadio;
+        dabStop(theRadio);
+        dabExit(theRadio);
         delete theDevice;
         exit(22);
     }
@@ -633,30 +644,35 @@ int main(int argc, char **argv)
         fprintf(stderr, "no ensemble data found, fatal\n");
         theDevice->stopReader();
         sleep(1);
-        theRadio->reset();
-        delete theRadio;
-        delete theDevice;
+        dabStop(theRadio);
+        dabExit(theRadio);
         exit(22);
     }
 
     run.store(true);
     std::thread keyboard_listener = std::thread(&listener);
     if (serviceIdentifier != -1)
-        programName = theRadio->dab_getserviceName(serviceIdentifier);
+        programName = dab_getserviceName(theRadio, serviceIdentifier);
     fprintf(stderr, "going to start program %s\n", programName.c_str());
-    if (theRadio->dab_service(programName) < 0)
+
+    audiodata ad;
+    dataforAudioService(theRadio, programName.c_str(), &ad, 0);
+
+    if (!ad.defined)
     {
         fprintf(stderr, "sorry  we cannot handle service %s\n",
                 programName.c_str());
         run.store(false);
     }
 
+    dabReset_msc(theRadio);
+    set_audioChannel (theRadio, &ad);
+
     while (run.load())
         sleep(1);
     theDevice->stopReader();
-    theRadio->reset();
-    delete theRadio;
-    delete theDevice;
+    dabStop(theRadio);
+    dabExit(theRadio);
 }
 
 void printOptions(void)
@@ -712,17 +728,25 @@ void selectNext(void)
     }
     //	skip the data services. Slightly dangerous here, may be
     //	add a guard for "only data services" ensembles
-    while (!theRadio->is_audioService(programNames[foundIndex]))
+    while (!is_audioService(theRadio, programNames[foundIndex].c_str()))
         foundIndex = (foundIndex + 1) % programNames.size();
 
     programName = programNames[foundIndex];
     fprintf(stderr, "we now try to start program %s\n", programName.c_str());
-    if (theRadio->dab_service(programName) < 0)
+
+    audiodata ad;
+    dataforAudioService(theRadio, programName.c_str(), &ad, 0);
+
+    if (!ad.defined)
     {
         fprintf(stderr, "sorry  we cannot handle service %s\n",
                 programName.c_str());
         sighandler(9);
     }
+
+    dabReset_msc(theRadio);
+    set_audioChannel(theRadio, &ad);
+
     fprintf(stderr, "{\"ps\":\"%s\"}\n", programName.c_str());
 }
 
@@ -743,15 +767,22 @@ void listener(void)
             std::stringstream ss;
             ss << std::hex << line;
             ss >> serviceIdentifier;
-            programName = theRadio->dab_getserviceName(serviceIdentifier);
+            programName = dab_getserviceName(theRadio, serviceIdentifier);
             fprintf(stderr, "going to start program %s\n", programName.c_str());
-            if (theRadio->dab_service(programName) < 0)
+
+            audiodata ad;
+            dataforAudioService(theRadio, programName.c_str(), &ad, 0);
+
+            if (!ad.defined)
             {
                 fprintf(stderr, "sorry  we cannot handle service %s\n",
                         programName.c_str());
                 sighandler(9);
             }
             fprintf(stderr, "{\"ps\":\"%s\"}\n", programName.c_str());
+
+            dabReset_msc(theRadio);
+            set_audioChannel(theRadio, &ad);
         }
     }
 }
