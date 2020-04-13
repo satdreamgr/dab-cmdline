@@ -665,6 +665,7 @@ int main(int argc, char **argv)
         run.store(false);
     }
 
+    programdataHandler(&ad, nullptr);
     dabReset_msc(theRadio);
     set_audioChannel (theRadio, &ad);
 
@@ -744,6 +745,7 @@ void selectNext(void)
         sighandler(9);
     }
 
+    programdataHandler(&ad, nullptr);
     dabReset_msc(theRadio);
     set_audioChannel(theRadio, &ad);
 
@@ -781,6 +783,7 @@ void listener(void)
             }
             fprintf(stderr, "{\"ps\":\"%s\"}\n", programName.c_str());
 
+            programdataHandler(&ad, nullptr);
             dabReset_msc(theRadio);
             set_audioChannel(theRadio, &ad);
         }
