@@ -466,7 +466,7 @@ int main(int argc, char **argv)
 
 //	For file input we do not need options like Q, G and C,
 //	We do need an option to specify the filename
-#if (!defined(HAVE_WAVFILES) && !defined(HAVE_RAWFILES))
+#if HAVE_RTLSDR
     while ((opt = getopt(argc, argv, "W:M:B:C:P:G:S:Qp:k:")) != -1)
     {
 #elif HAVE_RTL_TCP
@@ -685,7 +685,9 @@ void printOptions(void)
                           -C channel  channel to be used\n\
                           -G Gain     gain for device (range 1 .. 100)\n\
                           -Q          if set, set autogain for device true\n\
-	                  -F filename in case the input is from file\n\
+                          -F filename in case the input is from file\n\
+                          -H url      hostname for connection for rtl_tcp\n\
+                          -I number   baseport for connection for rtl_tcp\n\
                           -S hexnumber use hexnumber to identify program\n\
                           -p ppmoffset use ppmoffset to correct oscillator frequency\n\
                           -k khzOffset use khzOffset to correct initial tuning offset\n\n");
