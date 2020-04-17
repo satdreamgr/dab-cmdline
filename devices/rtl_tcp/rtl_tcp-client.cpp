@@ -127,9 +127,9 @@ void	rtl_tcp_client:: run (void) {
 //	uint8_t to std::complex<float>
 int32_t	rtl_tcp_client::getSamples (std::complex<float> *V, int32_t size) { 
 int32_t	amount, i;
-uint8_t	*tempBuffer = (uint8_t *)alloca (2 * size * sizeof (uint8_t));
+std::vector<uint8_t> tempBuffer (2 * size);
 //
-	amount = theBuffer	-> getDataFromBuffer (tempBuffer, 2 * size);
+	amount = theBuffer	-> getDataFromBuffer (tempBuffer. data (), 2 * size);
 	for (i = 0; i < amount / 2; i ++)
 	    V [i] = std::complex<float> (
 	                        (float (tempBuffer [2 * i] - 128)) / 128.0,
