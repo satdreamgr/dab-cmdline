@@ -27,6 +27,7 @@
  */
 
 #include	"rtl_tcp-client.h"
+#include	<vector>
 //
 	rtl_tcp_client::rtl_tcp_client	(std::string	hostname,
 	                                 int32_t	port,
