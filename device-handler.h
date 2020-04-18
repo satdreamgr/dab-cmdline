@@ -36,10 +36,8 @@ class	deviceHandler {
 public:
 			deviceHandler 	(void);
 virtual			~deviceHandler 	(void);
-virtual		void	setVFOFrequency	(int32_t);
-virtual		int32_t	getVFOFrequency	(void);
 virtual		int32_t	defaultFrequency	(void);
-virtual		bool	restartReader	(void);
+virtual		bool	restartReader	(int32_t);
 virtual		void	stopReader	(void);
 virtual		int32_t	getSamples	(std::complex<float> *, int32_t);
 virtual		int32_t	Samples		(void);
@@ -50,6 +48,10 @@ virtual		bool	has_autogain	(void);
 virtual		void	set_autogain	(bool);
 virtual		void	set_KhzOffset	(int32_t);
 
+//
+//	for the sdrplay
+virtual		void	set_ifgainReduction (int);
+virtual		void	set_lnaState	(int);
 //
 protected:
 		int32_t	lastFrequency;

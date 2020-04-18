@@ -27,11 +27,13 @@
 #include	<getopt.h>
 #include        <cstdio>
 #include        <iostream>
+#include	<complex>
+#include	<vector>
+#include	"dab-api.h"
 #include	"audiosink.h"
-#include	"dab-class.h"
 #include	"config.h"
 #include	"radiodata.h"
-#include	"band-handler.h"
+#include	"includes/support/band-handler.h"
 #include	"tcp-writer.h"
 #ifdef	HAVE_SDRPLAY
 #include	"sdrplay-handler.h"
@@ -54,7 +56,7 @@ void    listener	(void);
 //	we deal with some callbacks, so we have some data that needs
 //	to be accessed from global contexts
 static
-dabClass	*theRadio	= NULL;
+void	*theRadio	= nullptr;
 
 static
 tcpWriter	*theWriter;
@@ -145,9 +147,12 @@ char storage [256];
 //	The function is called from within the library with
 //	a string, the so-called dynamic label
 static
+std::string localString;
+static
 void	dataOut_Handler (std::string dynamicLabel, void *ctx) {
+	localString = dynamicLabel;
 	(void)ctx;
-	theWriter	-> sendData (Q_TEXT_MESSAGE, dynamicLabel);
+	theWriter	-> sendData (Q_TEXT_MESSAGE, localString);
 }
 //
 static
@@ -214,7 +219,7 @@ bool	err;
 	my_radioData. theChannel	= "11C";
 	my_radioData. theBand		= BAND_III;
 	my_radioData. ppmCorrection	= 0;
-	my_radioData. theGain		= 35;	// scale = 0 .. 100
+	my_radioData. theGain	= 45;	// scale = 0 .. 100
 	my_radioData. soundChannel	= "default";
 	my_radioData. latency		= 10;
 	my_radioData. waitingTime	= 10;
@@ -241,13 +246,14 @@ bool	err;
 	   theDevice	= new sdrplayHandler (frequency,
 	                                      my_radioData. ppmCorrection,
 	                                      my_radioData. theGain,
+	                                      3,	// lnaState
 	                                      my_radioData. autogain,
 	                                      0,
 	                                      0);
 #elif	HAVE_AIRSPY
 	   theDevice	= new airspyHandler (frequency,
 	                                     my_radioData. ppmCorrection,
-	                                     my_radioData. theGain);
+	                                     my_radioData. theGain, false);
 #elif	HAVE_RTLSDR
 	   theDevice	= new rtlsdrHandler (frequency,
 	                                     my_radioData. ppmCorrection,
@@ -278,24 +284,24 @@ bool	err;
 	}
 //
 //	and with a sound device we can create a "backend"
-	theRadio	= new dabClass (theDevice,
-	                                my_radioData. theMode,
-	                                NULL,		// no spectrum shown
-	                                NULL,		// no constellations
-	                                syncsignalHandler,
-	                                systemData,
-	                                ensemblenameHandler,
-	                                programnameHandler,
-	                                fibQuality,
-	                                pcmHandler,
-	                                dataOut_Handler,
-	                                bytesOut_Handler,
-	                                programdataHandler,
-	                                mscQuality,
-	                                NULL,		// no mot slides
-	                                NULL
-	                               );
-	if (theRadio == NULL) {
+	theRadio	= dabInit (theDevice,
+	                           my_radioData. theMode,
+	                           syncsignalHandler,
+	                           systemData,
+	                           ensemblenameHandler,
+	                           programnameHandler,
+	                           fibQuality,
+	                           pcmHandler,
+	                           dataOut_Handler,
+	                           bytesOut_Handler,
+	                           programdataHandler,
+	                           mscQuality,
+	                           nullptr,	// no mot slides
+	                           nullptr,	// no spectrum shown
+	                           nullptr,	// no constellations
+	                           nullptr	// ctx
+	                          );
+	if (theRadio == nullptr) {
 	   fprintf (stderr, "sorry, no radio available, fatal\n");
 	   exit (4);
 	}
@@ -303,7 +309,6 @@ bool	err;
 	theDevice	-> setGain (my_radioData. theGain);
 	if (my_radioData. autogain)
 	   theDevice	-> set_autogain (my_radioData. autogain);
-	theDevice	-> setVFOFrequency (frequency);
 
 	running. store (true);
 	std::thread port_listener	= std::thread (listener);
@@ -314,9 +319,9 @@ bool	err;
 	while (running. load ())
 	   sleep (1);
 	theDevice	-> stopReader ();
-	theRadio	-> stop ();
+	dabStop (theRadio);
 	delete	theWriter;
-	delete	theRadio;
+	dabExit	(theRadio);
 	delete	theDevice;	
 	delete	soundOut;
 }
@@ -405,20 +410,25 @@ void	listener (void) {
 	      }
 	   }
 	   catch (int e) {
-	       fprintf (stderr, "disconnected\n");
+	      fprintf (stderr, "disconnected\n");
+	      dabStop (theRadio);
 	   }
 	}
 	close (socket_desc);	
 }
 
 void	handleRequest (void) {
+int32_t	frequency;
+
+	fprintf (stderr, "handling requests\n");
+	fprintf (stderr, "bufferfill %d\n",
+	                buffer -> GetRingBufferReadAvailable ());
 	while (buffer -> GetRingBufferReadAvailable () >= PACKET_SIZE) {
 	   uint8_t lbuf [PACKET_SIZE];
-	   fprintf (stderr, "bufferfill %d\n",
-	                buffer -> GetRingBufferReadAvailable ());
 	   buffer	-> getDataFromBuffer (lbuf, PACKET_SIZE);
 	   switch (lbuf [2]) {
 	      case Q_QUIT:
+	         fprintf (stderr, "quit request\n");
 	         running. store (false);
 	         throw (33);
 	         break;
@@ -435,26 +445,44 @@ void	handleRequest (void) {
 	                          std::string ((char *)(&(lbuf [3])));
 	         fprintf (stderr, "service request for %s\n",
 	                              my_radioData. serviceName. c_str ());
-	         if (theRadio -> is_audioService (my_radioData. serviceName))
-	            theRadio -> dab_service (my_radioData. serviceName);
+	         
+	         if (is_audioService (theRadio,
+	                              my_radioData. serviceName. c_str ())) {
+	            audiodata ad;
+	            dataforAudioService (theRadio,
+	                                 my_radioData. serviceName. c_str (),
+	                                 &ad, 0);
+	            if (!ad. defined) {
+	               std::cerr << "sorry  we cannot handle service " <<
+                                            my_radioData. serviceName << "\n";
+	               running. store (false);
+	            }
+	            else {
+	               dabReset_msc (theRadio);
+	               set_audioChannel (theRadio, &ad);
+	            }
+	         }
 	         break;
 
 	      case Q_CHANNEL:
-	         theRadio	-> stop ();
+	         fprintf (stderr, "channel request\n");
+	         dabStop (theRadio);
 	         theDevice	-> stopReader ();
+	         fprintf (stderr, "radio and device stopped\n");
 	         my_radioData. theChannel = std::string ((char *)(&(lbuf [3])));
 	         fprintf (stderr, "selecting channel %s\n", 
 	                              (char *)(&(buffer [1])));
-	         {  int frequency = theBandHandler -> Frequency (my_radioData. theBand,
-	                                              my_radioData. theChannel);
-	            theDevice	-> setVFOFrequency (frequency);
-	         }
-	         theRadio	-> startProcessing ();
-	         theDevice	-> restartReader ();
+	         programNames. resize (0);
+	         programSIds . resize (0);
+	         frequency =
+	               theBandHandler -> Frequency (my_radioData. theBand,
+	                                            my_radioData. theChannel);
+	         dabStartProcessing (theRadio);
+	         theDevice	-> restartReader (frequency);
 	         break;
 
 	      default:
-	      break;
+	         break;
 	   }
 	}
 }

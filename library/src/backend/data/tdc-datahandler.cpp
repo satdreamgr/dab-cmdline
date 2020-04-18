@@ -4,19 +4,19 @@
  *    Jan van Katwijk (J.vanKatwijk@gmail.com)
  *    Lazy Chair Computing
  *
- *    This file is part of the Qt-DAB
- *    Qt-DAB is free software; you can redistribute it and/or modify
+ *    This file is part of the DAB-library
+ *    DAB-library is free software; you can redistribute it and/or modify
  *    it under the terms of the GNU General Public License as published by
  *    the Free Software Foundation; either version 2 of the License, or
  *    (at your option) any later version.
  *
- *    Qt-DAB is distributed in the hope that it will be useful,
+ *    DAB-library is distributed in the hope that it will be useful,
  *    but WITHOUT ANY WARRANTY; without even the implied warranty of
  *    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  *    GNU General Public License for more details.
  *
  *    You should have received a copy of the GNU General Public License
- *    along with Qt-DAB; if not, write to the Free Software
+ *    along with DAB-library; if not, write to the Free Software
  *    Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
@@ -37,7 +37,6 @@ int32_t offset  = 0;
 uint8_t *data   = (uint8_t *)(m. data ());
 int32_t size    = m. size ();
 int16_t i;
-uint16_t        crc;
 
 //      we maintain offsets in bits, the "m" array has one bit per byte
         while (offset < size) {
@@ -52,9 +51,9 @@ uint16_t        crc;
               return;
 
 //      we have a syncword
-           uint16_t syncword    = getBits (data, offset,      16);
-           int16_t length       = getBits (data, offset + 16, 16);
-           uint16_t crc         = getBits (data, offset + 32, 16);
+//	   uint16_t syncword    = getBits (data, offset,      16);
+	   int16_t length       = getBits (data, offset + 16, 16);
+//	   uint16_t crc         = getBits (data, offset + 32, 16);
 
            uint8_t frametypeIndicator =
                                   getBits (data, offset + 48,  8);
@@ -101,10 +100,11 @@ int16_t i;
 int16_t noS     = getBits (data, offset, 8);
 uint8_t	buffer [length];
 
+	(void)noS;
 	for (i = 0; i < length; i ++)
 	   buffer [i] = getBits (data, offset + i * 8, 8);
 
-	if (bytesOut != NULL)
+	if (bytesOut != nullptr)
 	   bytesOut (buffer, length, 0, ctx);
 	return offset + length * 8;
 }
@@ -117,7 +117,7 @@ uint8_t	buffer [length];
 	for (i = 0; i < length; i ++)
 	   buffer [i] = getBits (data, offset + i * 8, 8);
 
-	if (bytesOut != NULL)
+	if (bytesOut != nullptr)
 	   bytesOut (buffer, length, 1, ctx);
         return offset + length * 8;
 }
@@ -147,6 +147,7 @@ uint16_t        crc;
            testVector [3 + i] = getBits (data, offset + 40 + i * 8, 8);
 	testVector [3 + size    ] = getBits (data, offset + 24, 8);
 	testVector [3 + size + 1] = getBits (data, offset + 32, 8);
+	(void)crc;
         return check_crc_bytes (testVector, 5 + size) == 0;
 }
 

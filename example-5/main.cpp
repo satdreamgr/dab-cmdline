@@ -27,10 +27,12 @@
 #include	<getopt.h>
 #include        <cstdio>
 #include        <iostream>
+#include	<complex>
+#include	<vector>
 #include	"audiosink.h"
 #include	"filesink.h"
-#include	"dab-class.h"
-#include	"band-handler.h"
+#include	"dab-api.h"
+#include	"includes/support/band-handler.h"
 #ifdef	HAVE_SDRPLAY
 #include	"sdrplay-handler.h"
 #elif	HAVE_AIRSPY
@@ -62,7 +64,7 @@ static
 std::atomic<bool> run;
 
 static
-dabClass	*theRadio	= NULL;
+void	*theRadio	= NULL;
 
 static
 std::atomic<bool>timeSynced;
@@ -80,11 +82,11 @@ audioBase	*soundOut	= NULL;
 tcpServer	tdcServer (8888);
 #endif
 
-std::string	programName		= "Classic FM";
-int32_t		serviceIdentifier	= -1;
+std::string	programName		= "Sky Radio";
+//int32_t		serviceIdentifier	= -1;
 
 static void sighandler (int signum) {
-        fprintf (stderr, "Signal caught, terminating!\n");
+	fprintf (stderr, "Signal caught, terminating!\n");
 	run. store (false);
 }
 
@@ -106,7 +108,6 @@ void	ensemblenameHandler (std::string name, int Id, void *userData) {
 	                          name. c_str (), (uint32_t)Id);
 	ensembleRecognized. store (true);
 }
-
 
 std::vector<std::string> programNames;
 std::vector<int> programSIds;
@@ -219,7 +220,12 @@ uint8_t		theMode		= 1;
 std::string	theChannel	= "11C";
 uint8_t		theBand		= BAND_III;
 int16_t		ppmCorrection	= 0;
+#ifdef	HAVE_SDRPLAY
+int16_t		GRdB		= 30;
+int16_t		lnaState	= 2;
+#else
 int		theGain		= 35;	// scale = 0 .. 100
+#endif
 std::string	soundChannel	= "default";
 int16_t		latency		= 10;
 int16_t		timeSyncTime	= 5;
@@ -252,12 +258,12 @@ bool	err;
 
 //	For file input we do not need options like Q, G and C,
 //	We do need an option to specify the filename
-#if	(!defined (HAVE_WAVFILES) && !defined (HAVE_RAWFILES))
-	while ((opt = getopt (argc, argv, "D:d:M:B:C:P:G:A:L:S:QO:")) != -1) {
-#elif   HAVE_RTL_TCP
-	while ((opt = getopt (argc, argv, "D:d:M:B:C:P:G:A:L:S:H:I:QO:")) != -1) {
-#else
+#if	(defined (HAVE_WAVFILES) && defined (HAVE_RAWFILES))
 	while ((opt = getopt (argc, argv, "D:d:M:B:P:A:L:S:F:O:")) != -1) {
+#elif   HAVE_RTL_TCP
+	while ((opt = getopt (argc, argv, "D:d:M:B:C:P:G:A:L:S:QO:")) != -1) {
+#else
+	while ((opt = getopt (argc, argv, "D:d:M:B:C:P:G:A:L:S:H:I:QO:")) != -1) {
 #endif
 	   switch (opt) {
 	      case 'D':
@@ -295,9 +301,24 @@ bool	err;
 	         theChannel	= std::string (optarg);
 	         break;
 
+#ifdef	HAVE_SDRPLAY
+	      case 'G':
+	         GRdB		= atoi (optarg);
+	         break;
+
+	      case 'L':
+	         lnaState	= atoi (optarg);
+	         break;
+
+#else
 	      case 'G':
 	         theGain	= atoi (optarg);
 	         break;
+
+	      case 'L':
+	         latency	= atoi (optarg);
+	         break;
+#endif
 
 	      case 'Q':
 	         autogain	= true;
@@ -326,17 +347,6 @@ bool	err;
 	         soundChannel	= optarg;
 	         break;
 
-	      case 'L':
-	         latency	= atoi (optarg);
-	         break;
-
-	      case 'S': {
-                 std::stringstream ss;
-                 ss << std::hex << optarg;
-                 ss >> serviceIdentifier;
-                 break;
-              }
-
 	      default:
 	         printOptions ();
 	         exit (1);
@@ -353,13 +363,14 @@ bool	err;
 	   theDevice	= new sdrplayHandler (frequency,
 	                                      ppmCorrection,
 	                                      theGain,
+	                                      3,
 	                                      autogain,
 	                                      0,
 	                                      0);
 #elif	HAVE_AIRSPY
 	   theDevice	= new airspyHandler (frequency,
 	                                     ppmCorrection,
-	                                     theGain);
+	                                     theGain, false);
 #elif	HAVE_RTLSDR
 	   theDevice	= new rtlsdrHandler (frequency,
 	                                     ppmCorrection,
@@ -393,23 +404,23 @@ bool	err;
 	}
 //
 //	and with a sound device we can create a "backend"
-	theRadio	= new dabClass (theDevice,
-	                                theMode,
-	                                NULL,		// no spectrum shown
-	                                NULL,		// no constellations
-	                                syncsignalHandler,
-	                                systemData,
-	                                ensemblenameHandler,
-	                                programnameHandler,
-	                                fibQuality,
-	                                pcmHandler,
-	                                dataOut_Handler,
-	                                bytesOut_Handler,
-	                                programdataHandler,
-	                                mscQuality,
-	                                NULL,		// no mot slides
-	                                NULL
-	                               );
+	theRadio	= dabInit (theDevice,
+	                           theMode,
+	                           syncsignalHandler,
+	                           systemData,
+	                           ensemblenameHandler,
+	                           programnameHandler,
+	                           fibQuality,
+	                           pcmHandler,
+	                           dataOut_Handler,
+	                           bytesOut_Handler,
+	                           programdataHandler,
+	                           mscQuality,
+	                           NULL,		// no mot slides
+	                           NULL,		// no spectrum shown
+	                           NULL,		// no constellations
+	                           NULL
+	                          );
 	if (theRadio == NULL) {
 	   fprintf (stderr, "sorry, no radio available, fatal\n");
 	   exit (4);
@@ -418,29 +429,27 @@ bool	err;
 	theDevice	-> setGain (theGain);
 	if (autogain)
 	   theDevice	-> set_autogain (autogain);
-	theDevice	-> setVFOFrequency (frequency);
-	theDevice	-> restartReader ();
+	theDevice	-> restartReader (frequency);
 //
 //	The device should be working right now
 
 	timesyncSet.		store (false);
 	ensembleRecognized.	store (false);
-	theRadio -> startProcessing ();
+	dabStartProcessing (theRadio);
 
 	while (!timeSynced. load () && (--timeSyncTime >= 0))
-           sleep (1);
+	   sleep (1);
 
-        if (!timeSynced. load ()) {
-           cerr << "There does not seem to be a DAB signal here" << endl;
+	if (!timeSynced. load ()) {
+	   cerr << "There does not seem to be a DAB signal here" << endl;
 	   theDevice -> stopReader ();
-           sleep (1);
-           theRadio     -> stop ();
-           delete theRadio;
-           delete theDevice;
-           exit (22);
-
+	   sleep (1);
+	   dabStop	(theRadio);
+	   dabExit	(theRadio);
+	   delete theDevice;
+	   exit (22);
 	}
-        else
+	else
 	   cerr << "there might be a DAB signal here" << endl;
 
 	while (!ensembleRecognized. load () &&
@@ -454,47 +463,60 @@ bool	err;
 	   fprintf (stderr, "no ensemble data found, fatal\n");
 	   theDevice -> stopReader ();
 	   sleep (1);
-	   theRadio	-> reset ();
-	   delete theRadio;
+	   dabStop	(theRadio);
+	   dabExit	(theRadio);
 	   delete theDevice;
 	   exit (22);
 	}
 
 	run. store (true);
 	std::thread keyboard_listener = std::thread (&listener);
-	if (serviceIdentifier != -1) 
-	   programName = theRadio -> dab_getserviceName (serviceIdentifier);
-	fprintf (stderr, "we try to start program %s\n",
-                                                 programName. c_str ());
-	if (theRadio -> dab_service (programName) < 0) {
-	   fprintf (stderr, "sorry  we cannot handle service %s\n", 
-	                                             programName. c_str ());
-	   run. store (false);
-	}
+
+        std::cerr << "we try to start program " <<
+                                                 programName << "\n";
+        if (!is_audioService (theRadio, programName. c_str ())) {
+           std::cerr << "sorry  we cannot handle service " <<
+                                                 programName << "\n";
+           run. store (false);
+	   exit (22);
+        }
+
+        audiodata ad;
+        dataforAudioService (theRadio, programName. c_str (), &ad, 0);
+        if (!ad. defined) {
+           std::cerr << "sorry  we cannot handle service " <<
+                                                 programName << "\n";
+           run. store (false);
+        }
+
+        dabReset_msc (theRadio);
+        set_audioChannel (theRadio, &ad);
 
 	while (run. load ())
 	   sleep (1);
 	theDevice	-> stopReader ();
-	theRadio	-> reset ();
-	delete theRadio;
+	dabStop	(theRadio);
+	dabExit	(theRadio);
 	delete theDevice;	
 	delete soundOut;
 }
 
 void    printOptions (void) {
-        fprintf (stderr,
+	fprintf (stderr,
 "                          dab-cmdline options are\n\
-                          -W number   amount of time to look for an ensemble\n\
-                          -M Mode     Mode is 1, 2 or 4. Default is Mode 1\n\
-                          -B Band     Band is either L_BAND or BAND_III (default)\n\
-                          -P name     program to be selected in the ensemble\n\
-                          -C channel  channel to be used\n\
-                          -G Gain     gain for device (range 1 .. 100)\n\
-                          -Q          if set, set autogain for device true\n\
+	                  -W number   amount of time to look for an ensemble\n\
+	                  -M Mode     Mode is 1, 2 or 4. Default is Mode 1\n\
+	                  -B Band     Band is either L_BAND or BAND_III (default)\n\
+	                  -P name     program to be selected in the ensemble\n\
+	                  -C channel  channel to be used\n\
+	                  -G Gain     gain for device (range 1 .. 100)\n\
+	                  -L number   latency for audiobuffer\n\
+	                  -G gainreduction for SDRplay\n\
+	                  -L lnaState for SDRplay\n\
+	                  -Q          if set, set autogain for device true\n\
 	                  -F filename in case the input is from file\n\
-                          -A name     select the audio channel (portaudio)\n\
-                          -L number   latency for audiobuffer\n\
-                          -S hexnumber use hexnumber to identify program\n\n\
+	                  -A name     select the audio channel (portaudio)\n\
+	                  -S hexnumber use hexnumber to identify program\n\n\
 	                  -O filename put the output into a file rather than through portaudio\n");
 }
 
@@ -524,26 +546,34 @@ int16_t	foundIndex	= -1;
 	      break;
 	   }
 	}
+
 	if (foundIndex == -1) {
 	   fprintf (stderr, "system error\n");
 	   sighandler (9);
+	   exit (1);
 	}
+
 //	skip the data services. Slightly dangerous here, may be
 //	add a guard for "only data services" ensembles
-	while (!theRadio -> is_audioService (programNames [foundIndex]))
+	while (!is_audioService (theRadio,
+                                 programNames [foundIndex]. c_str ()))
 	   foundIndex = (foundIndex + 1) % programNames. size ();
 
 	programName = programNames [foundIndex];
 	fprintf (stderr, "we now try to start program %s\n",
-                                                 programName. c_str ());
-        if (theRadio -> dab_service (programName) < 0) {
-           fprintf (stderr, "sorry  we cannot handle service %s\n",
-                                                     programName. c_str ());
+	                                         programName. c_str ());
+
+	audiodata ad;
+        dataforAudioService (theRadio, programName. c_str (), &ad, 0);
+        if (!ad. defined) {
+           std::cerr << "sorry  we cannot handle service " <<
+                                                 programName << "\n";
 	   sighandler (9);
-        }
-	
+	}
+	dabReset_msc (theRadio);
+        set_audioChannel (theRadio, &ad);
 }
-	
+
 void	listener	(void) {
 	fprintf (stderr, "listener is running\n");
 	while (run. load ()) {
@@ -556,3 +586,4 @@ void	listener	(void) {
 	   }
 	}
 }
+

@@ -229,6 +229,7 @@ struct quantizer_spec quantizer_table [17] = {
 int16_t	i, j;
 int16_t *nPtr = &N [0][0];
 
+	this	-> ctx	= ctx;
 	// compute N[i][j]
 	for (i = 0;  i < 64;  i ++)
 	   for (j = 0;  j < 32;  ++j)
@@ -378,7 +379,7 @@ int32_t table_idx;
 
 	numberofFrames ++;
 	if (numberofFrames >= 50) {
-	   if (mscQuality != NULL)
+	   if (mscQuality != nullptr)
 	      mscQuality (2 * (50 - errorFrames), 0, 0, ctx);
 	   numberofFrames	= 0;
 	   errorFrames		= 0;
@@ -604,7 +605,7 @@ int16_t vLength = 24 * bitRate / 8;
 	         int16_t sample_buf [KJMP2_SAMPLES_PER_FRAME * 2];
 #ifdef	AAC_OUT
 	         soundOut ((int16_t *)(&MP2frame [0]), MP2bitCount,
-	                               0, false, NULL);
+	                               0, false, nullptr);
 #else
 	         if (mp2decodeFrame (MP2frame, sample_buf, &stereo)) {
 	            output (sample_buf,
@@ -655,7 +656,7 @@ uint8_t	newbyte = (01 << bitnr);
 }
 
 void	mp2Processor::output (int16_t *buffer, int size, int rate, bool stereo) {
-	if (soundOut != NULL)
+	if (soundOut != nullptr)
 	   soundOut (buffer, size, rate, stereo, ctx);
 }
 

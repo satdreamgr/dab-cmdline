@@ -22,7 +22,7 @@
  *
  *	E X A M P L E  P R O G R A M
  *	This program might (or might not) be used to mould the interface to
- *	your wishes. Do not take it as a definitive and "ready: program
+ *	your wishes. Do not take it as a definitive and "ready" program
  *	for the DAB-library
  */
 #include	<unistd.h>
@@ -30,12 +30,16 @@
 #include	<getopt.h>
 #include        <cstdio>
 #include        <iostream>
+#include	<complex>
+#include	<vector>
 #include	"audiosink.h"
 #include	"filesink.h"
-#include	"dab-class.h"
-#include	"band-handler.h"
+#include	"dab-api.h"
+#include	"includes/support/band-handler.h"
 #ifdef	HAVE_SDRPLAY
 #include	"sdrplay-handler.h"
+#elif	HAVE_SDRPLAY_V3
+#include	"sdrplay-handler-v3.h"
 #elif	HAVE_AIRSPY
 #include	"airspy-handler.h"
 #elif	HAVE_RTLSDR
@@ -46,7 +50,12 @@
 #include	"rawfiles.h"
 #elif	HAVE_RTL_TCP
 #include	"rtl_tcp-client.h"
+#elif	HAVE_HACKRF
+#include	"hackrf-handler.h"
+#elif	HAVE_LIME
+#include	"lime-handler.h"
 #endif
+
 #include	<locale>
 #include	<codecvt>
 #include	<atomic>
@@ -64,7 +73,7 @@ static
 std::atomic<bool> run;
 
 static
-dabClass	*theRadio	= NULL;
+void	*theRadio	= NULL;
 
 static
 std::atomic<bool>timeSynced;
@@ -83,10 +92,10 @@ tcpServer	tdcServer (8888);
 #endif
 
 std::string	programName		= "Sky Radio";
-int32_t		serviceIdentifier	= -1;
+//int32_t		serviceIdentifier	= -1;
 
 static void sighandler (int signum) {
-        fprintf (stderr, "Signal caught, terminating!\n");
+	fprintf (stderr, "Signal caught, terminating!\n");
 	run. store (false);
 }
 
@@ -113,12 +122,16 @@ void	ensemblenameHandler (std::string name, int Id, void *userData) {
 std::vector<std::string> programNames;
 std::vector<int> programSIds;
 
+#include	<bits/stdc++.h>
+
+std::unordered_map <int, std::string> ensembleContents;
 static
 void	programnameHandler (std::string s, int SId, void *userdata) {
 	for (std::vector<std::string>::iterator it = programNames.begin();
 	             it != programNames. end(); ++it)
 	   if (*it == s)
 	      return;
+	ensembleContents. insert (pair <int, std::string> (SId, s));
 	programNames. push_back (s);
 	programSIds . push_back (SId);
 	std::cerr << "program " << s << " is part of the ensemble\n";
@@ -230,28 +243,65 @@ int	main (int argc, char **argv) {
 uint8_t		theMode		= 1;
 std::string	theChannel	= "11C";
 uint8_t		theBand		= BAND_III;
-int16_t		ppmCorrection	= 0;
-int		theGain		= 45;	// scale = 0 .. 100
+#ifdef	HAVE_HACKRF
+int		lnaGain		= 40;
+int		vgaGain		= 40;
+int		ppmOffset	= 0;
+const char	*optionsString	= "D:d:M:B:P:O:A:C:G:g:p:";
+#elif	HAVE_LIME
+int16_t		gain		= 70;
+std::string	antenna		= "Auto";
+const char	*optionsString	= "T:D:d:M:B:P:O:A:C:G:g:X:";
+#elif	HAVE_SDRPLAY	
+int16_t		GRdB		= 30;
+int16_t		lnaState	= 2;
+bool		autogain	= false;
+int16_t		ppmOffset	= 0;
+const char	*optionsString	= "T:D:d:M:B:P:O:A:C:G:L:Qp:";
+#elif	HAVE_SDRPLAY_V3	
+int16_t		GRdB		= 30;
+int16_t		lnaState	= 2;
+bool		autogain	= false;
+int16_t		ppmOffset	= 0;
+const char	*optionsString	= "T:D:d:M:B:P:O:A:C:G:L:Qp:";
+#elif	HAVE_AIRSPY
+int16_t		gain		= 20;
+bool		autogain	= false;
+int		ppmOffset	= 0;
+const char	*optionsString	= "T:D:d:M:B:P:O:A:C:G:p:";
+#elif	HAVE_RTLSDR
+int16_t		gain		= 50;
+bool		autogain	= false;
+int16_t		ppmOffset	= 0;
+const char	*optionsString	= "T:D:d:M:B:P:O:A:C:G:p:Q";
+#elif	HAVE_WAVFILES
+std::string	fileName;
+bool		repeater	= true;
+const char	*optionsString	= "T:D:d:M:B:P:O:A:F:R:";
+#elif	HAVE_RAWFILES
+std::string	fileName;
+bool	repeater		= true;
+const char	*optionsString	= "T:D:d:M:B:P:O:A:F:R:";
+#elif
+//	HAVE_RTL_TCP
+int		gain		= 50;
+bool		autogain	= false;
+int		ppmOffset	= 0;
+std::string	hostname = "127.0.0.1";		// default
+int32_t		basePort = 1234;		// default
+const char	*optionsString	= "T:D:d:M:B:P:O:A:C:G:Qp:H:I";
+#endif
 std::string	soundChannel	= "default";
 int16_t		latency		= 10;
 int16_t		timeSyncTime	= 5;
 int16_t		freqSyncTime	= 5;
-bool		autogain	= false;
 int		opt;
 struct sigaction sigact;
 bandHandler	dabBand;
 deviceHandler	*theDevice;
-#ifdef	HAVE_WAVFILES
-std::string	fileName;
-#elif	HAVE_RAWFILES
-std::string	fileName;
-#elif HAVE_RTL_TCP
-std::string	hostname = "127.0.0.1";		// default
-int32_t		basePort = 1234;		// default
-#endif
 bool	err;
-
-	std::cerr << "dab_cmdline V 1.0alfa,\n \
+int	theDuration		= -1;	// no limit
+	std::cerr << "dab_cmdline example II,\n \
 	                Copyright 2017 J van Katwijk, Lazy Chair Computing\n";
 	timeSynced.	store (false);
 	timesyncSet.	store (false);
@@ -264,17 +314,12 @@ bool	err;
 
 	std::setlocale (LC_ALL, "en-US.utf8");
 
-//	For file input we do not need options like Q, G and C,
-//	We do need an option to specify the filename
-#if	(!defined (HAVE_WAVFILES) && !defined (HAVE_RAWFILES))
-	while ((opt = getopt (argc, argv, "D:d:M:B:C:P:G:A:L:S:QO:")) != -1) {
-#elif   HAVE_RTL_TCP
-	while ((opt = getopt (argc, argv, "D:d:M:B:C:P:G:A:L:S:H:I:QO:")) != -1) {
-#else
-	while ((opt = getopt (argc, argv, "D:d:M:B:P:A:L:S:F:O:")) != -1) {
-#endif
+	fprintf (stderr, "options are %s\n", optionsString);
+	while ((opt = getopt (argc, argv, optionsString)) != -1) {
 	   switch (opt) {
-
+	      case 'T':
+	         theDuration	= 60 * atoi (optarg);	// minutes
+	         break;
 	      case 'D':
 	         freqSyncTime	= atoi (optarg);
 	         break;
@@ -298,42 +343,6 @@ bool	err;
 	         programName	= optarg;
 	         break;
 
-	      case 'p':
-	         ppmCorrection	= atoi (optarg);
-	         break;
-
-#ifdef	HAVE_WAVFILES
-	      case 'F':
-	         fileName	= std::string (optarg);
-	         break;
-#elif	HAVE_RAWFILES
-	      case 'F':
-	         fileName	= std::string (optarg);
-	         break;
-#else
-	      case 'C':
-	         theChannel	= std::string (optarg);
-	         break;
-
-	      case 'G':
-	         theGain	= atoi (optarg);
-	         break;
-
-	      case 'Q':
-	         autogain	= true;
-	         break;
-
-#ifdef	HAVE_RTL_TCP
-	      case 'H':
-	         hostname	= std::string (optarg);
-	         break;
-
-	      case 'I':
-	         basePort	= atoi (optarg);
-	         break;
-#endif
-#endif
-
 	      case 'O':
 	         soundOut	= new fileSink (std::string (optarg), &err);
 	         if (!err) {
@@ -346,18 +355,156 @@ bool	err;
 	         soundChannel	= optarg;
 	         break;
 
-	      case 'L':
-	         latency	= atoi (optarg);
+#ifdef	HAVE_WAVFILES
+	      case 'F':
+	         fileName	= std::string (optarg);
+
+	      case 'R':
+	         repeater	= false;
+	         break;
+#elif	HAVE_RAWFILES
+	      case 'F':
+	         fileName	= std::string (optarg);
 	         break;
 
-	      case 'S': {
-                 std::stringstream ss;
-                 ss << std::hex << optarg;
-                 ss >> serviceIdentifier;
-                 break;
-              }
+	      case 'R':	         repeater	= false;
+	         break;
 
+#elif	HAVE_HACKRF
+	      case 'G':
+	         lnaGain	= atoi (optarg);
+	         break;
+
+	      case 'g':
+	         vgaGain	= atoi (optarg);
+	         break;
+
+	      case 'C':
+	         theChannel	= std::string (optarg);
+	         break;
+	
+	      case 'p':
+	         ppmOffset	= 0;
+	         break;
+
+#elif	HAVE_LIME
+	      case 'G':
+	      case 'g':	
+	         gain		= atoi (optarg);
+	         break;
+
+	      case 'X':
+	         antenna	= std::string (optarg);
+	         break;
+
+	      case 'C':
+	         theChannel	= std::string (optarg);
+	         fprintf (stderr, "%s \n", optarg);
+	         break;
+
+#elif	HAVE_SDRPLAY
+	      case 'G':
+	         GRdB		= atoi (optarg);
+	         break;
+
+	      case 'L':
+	         lnaState	= atoi (optarg);
+	         break;
+
+	      case 'Q':
+	         autogain	= true;
+	         break;
+
+	      case 'C':
+	         theChannel	= std::string (optarg);
+	         break;
+
+	      case 'p':
+	         ppmOffset	= atoi (optarg);
+	         break;
+
+#elif	HAVE_SDRPLAY_V3
+	      case 'G':
+	         GRdB		= atoi (optarg);
+	         break;
+
+	      case 'L':
+	         lnaState	= atoi (optarg);
+	         break;
+
+	      case 'Q':
+	         autogain	= true;
+	         break;
+
+	      case 'C':
+	         theChannel	= std::string (optarg);
+	         break;
+
+	      case 'p':
+	         ppmOffset	= atoi (optarg);
+	         break;
+
+#elif	HAVE_AIRSPY
+	      case 'G':
+	         gain		= atoi (optarg);
+	         break;
+
+	      case 'Q':
+	         autogain	= true;
+	         break;
+
+	      case 'p':
+	         ppmOffset	= atoi (optarg);
+	         break;
+
+	      case 'C':
+	         theChannel	= std::string (optarg);
+	         break;
+
+#elif	HAVE_RTLSDR
+	      case 'G':
+	         gain		= atoi (optarg);
+	         break;
+
+	      case 'Q':
+	         autogain	= true;
+	         break;
+
+	      case 'p':
+	         ppmOffset	= atoi (optarg);
+	         break;
+
+	      case 'C':
+	         theChannel	= std::string (optarg);
+	         break;
+
+#elif	HAVE_RTL_TCP
+	      case 'C':
+	         theChannel	= std::string (optarg);
+	         break;
+
+	      case 'H':
+	         hostname	= std::string (optarg);
+	         break;
+
+	      case 'I':
+	         basePort	= atoi (optarg);
+	         break;
+	      case "G":
+	         gain		= atoi (optarg);
+	         break;
+
+	      case 'Q':
+	         autogain	= true;
+	         break;
+
+	      case 'p':
+	         ppmOffset	= atoi (optarg);
+	         break;
+
+#endif
 	      default:
+	         fprintf (stderr, "Option %c not understood\n", opt);
 	         printOptions ();
 	         exit (1);
 	   }
@@ -371,31 +518,48 @@ bool	err;
 	try {
 #ifdef	HAVE_SDRPLAY
 	   theDevice	= new sdrplayHandler (frequency,
-	                                      ppmCorrection,
-	                                      theGain,
+	                                      ppmOffset,
+	                                      GRdB,
+	                                      lnaState,
+	                                      autogain,
+	                                      0,
+	                                      0);
+#elif	HAVE_SDRPLAY_V3
+	   theDevice	= new sdrplayHandler_v3 (frequency,
+	                                      ppmOffset,
+	                                      GRdB,
+	                                      lnaState,
 	                                      autogain,
 	                                      0,
 	                                      0);
 #elif	HAVE_AIRSPY
 	   theDevice	= new airspyHandler (frequency,
-	                                     ppmCorrection,
-	                                     theGain);
+	                                     ppmOffset,
+	                                     gain, false);
 #elif	HAVE_RTLSDR
 	   theDevice	= new rtlsdrHandler (frequency,
-	                                     ppmCorrection,
-	                                     theGain,
+	                                     ppmOffset,
+	                                     gain,
 	                                     autogain);
+#elif	HAVE_HACKRF
+	   theDevice	= new hackrfHandler	(frequency,
+	                                         ppmOffset,
+	                                         lnaGain,
+	                                         vgaGain);
+#elif	HAVE_LIME
+	   theDevice	= new limeHandler	(frequency, gain, antenna);
+
 #elif	HAVE_WAVFILES
-	   theDevice	= new wavFiles (fileName);
+	   theDevice	= new wavFiles (fileName, repeater);
 #elif	defined (HAVE_RAWFILES)
-	   theDevice	= new rawFiles (fileName);
+	   theDevice	= new rawFiles (fileName, repeater);
 #elif	HAVE_RTL_TCP
 	   theDevice	= new rtl_tcp_client (hostname,
 	                                      basePort,
 	                                      frequency,
-	                                      theGain,
+	                                      gain,
 	                                      autogain,
-	                                      ppmCorrection);
+	                                      ppmOffset);
 #endif
 
 	}
@@ -413,53 +577,49 @@ bool	err;
 	}
 //
 //	and with a sound device we now can create a "backend"
-	theRadio	= new dabClass (theDevice,
-	                                theMode,
-	                                NULL,		// no spectrum shown
-	                                NULL,		// no constellations
-	                                syncsignalHandler,
-	                                systemData,
-	                                ensemblenameHandler,
-	                                programnameHandler,
-	                                fibQuality,
-	                                pcmHandler,
-	                                dataOut_Handler,
-	                                bytesOut_Handler,
-	                                programdataHandler,
-	                                mscQuality,
-	                                motdataHandler,	// MOT in PAD
-	                                NULL		// Ctx
-	                               );
+	theRadio	= dabInit (theDevice,
+	                           theMode,
+	                           syncsignalHandler,
+	                           systemData,
+	                           ensemblenameHandler,
+	                           programnameHandler,
+	                           fibQuality,
+	                           pcmHandler,
+	                           dataOut_Handler,
+	                           bytesOut_Handler,
+	                           programdataHandler,
+	                           mscQuality,
+	                           motdataHandler,	// MOT in PAD
+	                           NULL,		// no spectrum shown
+	                           NULL,		// no constellations
+	                           NULL		// Ctx
+	                          );
 	if (theRadio == NULL) {
 	   std::cerr << "sorry, no radio available, fatal\n";
 	   exit (4);
 	}
 
-	theDevice	-> setGain (theGain);
-	if (autogain)
-	   theDevice	-> set_autogain (autogain);
-	theDevice	-> setVFOFrequency (frequency);
-	theDevice	-> restartReader ();
+	theDevice	-> restartReader (frequency);
 //
 //	The device should be working right now
 
 	timesyncSet.		store (false);
 	ensembleRecognized.	store (false);
-	theRadio -> startProcessing ();
+	dabStartProcessing (theRadio);
 
 	while (!timeSynced. load () && (--timeSyncTime >= 0))
-           sleep (1);
+	   sleep (1);
 
-        if (!timeSynced. load ()) {
-           cerr << "There does not seem to be a DAB signal here" << endl;
+	if (!timeSynced. load ()) {
+	   cerr << "There does not seem to be a DAB signal here" << endl;
 	   theDevice -> stopReader ();
-           sleep (1);
-           theRadio     -> stop ();
-           delete theRadio;
-           delete theDevice;
-           exit (22);
+	   sleep (1);
+	   dabStop (theRadio);
+	   dabExit (theRadio);
+	   delete theDevice;
+	   exit (22);
 	}
-        else
+	else
 	   std::cerr << "there might be a DAB signal here" << endl;
 
 	while (!ensembleRecognized. load () &&
@@ -473,47 +633,97 @@ bool	err;
 	   std::cerr << "no ensemble data found, fatal\n";
 	   theDevice -> stopReader ();
 	   sleep (1);
-	   theRadio	-> reset ();
-	   delete theRadio;
+	   dabReset (theRadio);
+	   dabExit  (theRadio);
 	   delete theDevice;
 	   exit (22);
 	}
 
 	run. store (true);
-	if (serviceIdentifier != -1) 
-	   programName = theRadio -> dab_getserviceName (serviceIdentifier);
 	std::cerr << "we try to start program " <<
-                                                 programName << "\n";
-	if (theRadio -> dab_service (programName) < 0) {
+	                                         programName << "\n";
+	audiodata ad;
+	if (!is_audioService (theRadio, programName. c_str ())) {
 	   std::cerr << "sorry  we cannot handle service " << 
 	                                         programName << "\n";
 	   run. store (false);
 	}
 
-	while (run. load ())
+	if (run. load ()) {
+	   dataforAudioService (theRadio,
+	                     programName. c_str (), &ad, 0);
+	   if (!ad. defined) {
+	      std::cerr << "sorry  we cannot handle service " << 
+	                                         programName << "\n";
+	      run. store (false);
+	   }
+	}
+
+	if (run. load ()) {
+	   dabReset_msc (theRadio);
+	   set_audioChannel (theRadio, &ad);
+	}
+
+	while (run. load () && (theDuration != 0)) {
+	   if (theDuration > 0)
+	      theDuration --;
 	   sleep (1);
+	}
 	theDevice	-> stopReader ();
-	theRadio	-> reset ();
-	delete theRadio;
+	dabReset (theRadio);
+	dabExit  (theRadio);
 	delete theDevice;	
 	delete soundOut;
 }
 
 void    printOptions (void) {
-        std::cerr << 
-"                          dab-cmdline options are\n\
-                          -D number   amount of time to look for an ensemble\n\
-	                  -d number   seconds within a time sync should be reached\n\
-                          -M Mode     Mode is 1, 2 or 4. Default is Mode 1\n\
-                          -B Band     Band is either L_BAND or BAND_III (default)\n\
-                          -P name     program to be selected in the ensemble\n\
-                          -C channel  channel to be used\n\
-                          -G Gain     gain for device (range 1 .. 100)\n\
-                          -Q          if set, set autogain for device true\n\
-	                  -F filename in case the input is from file\n\
-                          -A name     select the audio channel (portaudio)\n\
-                          -L number   latency for audiobuffer\n\
-                          -S hexnumber use hexnumber to identify program\n\n\
-	                  -O filename put the output into a file rather than through portaudio\n";
+	std::cerr << 
+"                          dab-cmdline options are\n"
+"	                  -T Duration\tstop after <Duration> seconds\n"
+"	                  -M Mode\tMode is 1, 2 or 4. Default is Mode 1\n"
+"	                  -D number\tamount of time to look for an ensemble\n"
+"	                  -d number\tseconds to reach time sync\n"
+"	                  -P name\tprogram to be selected in the ensemble\n"
+"			  -A name\t select the audio channel (portaudio)\n"
+"	                  -O fileName\t output to file <name>\n"
+"	for file input:\n"
+"	                  -F filename\tin case the input is from file\n"
+"	                  -R switch off automatic continuation after eof\n"
+"	for hackrf:\n"
+"	                  -B Band\tBand is either L_BAND or BAND_III (default)\n"
+"	                  -C Channel\n"
+"	                  -v vgaGain\n"
+"	                  -l lnaGain\n"
+"	                  -a amp enable (default off)\n"
+"	                  -c number\tppm offset\n"
+"	for SDRplay:\n"
+"	                  -B Band\tBand is either L_BAND or BAND_III (default)\n"
+"	                  -C Channel\n"
+"	                  -G Gain reduction in dB (range 20 .. 59)\n"
+"	                  -L lnaState (depends on model chosen)\n"
+"	                  -Q autogain (default off)\n"
+"	                  -c number\t ppm offset\n"
+"	for rtlsdr:\n"
+"	                  -B Band\tBand is either L_BAND or BAND_III (default)\n"
+"	                  -C Channel\n"
+"	                  -G number\t	gain, range 0 .. 100\n"
+"	                  -Q autogain (default off)\n"
+"	                  -c number\tppm offset\n"
+"	for airspy:\n"
+"	                  -B Band\tBand is either L_BAND or BAND_III (default)\n"
+"	                  -C Channel\n"
+"	                  -G number\t	gain, range 1 .. 21\n"
+"	                  -b set rf bias\n"
+"	                  -c number\t ppm Correction\n"
+"	for rtl_tcp:\n"
+"	                  -H url\t hostname for connection\n"
+"	                  -I number\t baseport for connection\n"
+"	                  -G number\t gain setting\n"
+"	                  -Q autogain (default off)\n"
+"	                  -c number\t ppm Correction\n"
+"	for limesdr:\n"
+"	                  -G number\t gain\n"
+"	                  -X antenna selection\n"
+"	                  -C channel\n";
 }
 

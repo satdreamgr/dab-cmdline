@@ -27,19 +27,28 @@
 #include        <thread>
 #include        <atomic>
 
+typedef	void (*device_eof_callback_t)(void * userData);
 /*
  */
 class	rawFiles: public deviceHandler {
 public:
-			rawFiles	(std::string);
+			rawFiles	(std::string, bool repeater = true);
+			rawFiles	(std::string,
+	                                 double fileOffset,
+	                                 device_eof_callback_t eofHandler,
+	                                 void * userData);
 	       		~rawFiles	(void);
 	int32_t		getSamples	(std::complex<float> *, int32_t);
 	uint8_t		myIdentity	(void);
 	int32_t		Samples		(void);
-	bool		restartReader	(void);
+	bool		restartReader	(int32_t);
 	void		stopReader	(void);
 private:
 	std::string	fileName;
+	double		fileOffset;
+	device_eof_callback_t	eofHandler;
+	bool		repeater;
+	void		*userData;
 virtual	void		run		(void);
 	RingBuffer<std::complex<float>>	*_I_Buffer;
 	int32_t		readBuffer	(std::complex<float> *, int32_t);

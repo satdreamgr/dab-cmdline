@@ -30,7 +30,7 @@
 #include	"dab-constants.h"
 #include	<stdio.h>
 #include	<stdint.h>
-#include	"dab-processor.h"
+#include	"backend-base.h"
 #include	"dab-api.h"
 #include	"firecode-checker.h"
 #include	"reed-solomon.h"
@@ -38,7 +38,7 @@
 #include	"pad-handler.h"
 
 
-class	mp4Processor : public dabProcessor {
+class	mp4Processor : public backendBase {
 public:
 			mp4Processor	(int16_t,
 	                                 audioOut_t,
@@ -59,23 +59,23 @@ private:
 	                                 int16_t frame_length,
 	                                 stream_parms *sp,
 	                                 bool*);
-	void		buildHeader (int16_t framelen,
-                                     stream_parms *sp,
-                                     uint8_t *header);
+	void		build_aacFile (int16_t		aac_frame_len,
+                                       stream_parms	*sp,
+	                               uint8_t		*data,
+                                       std::vector<uint8_t>  &header);
 	int16_t		superFramesize;
 	int16_t		blockFillIndex;
 	int16_t		blocksInBuffer;
 	int16_t		blockCount;
 	int16_t		bitRate;
-	uint8_t		*frameBytes;
-	uint8_t		**RSMatrix;
+	std::vector<uint8_t> frameBytes;
+	std::vector<uint8_t> outVector;
 	int16_t		RSDims;
 	int16_t		au_start	[10];
 	int32_t		baudRate;
 
 	firecode_checker	fc;
 	reedSolomon	my_rsDecoder;
-	uint8_t		*outVector;
 //	and for the aac decoder
 	faadDecoder	aacDecoder;
 

@@ -44,8 +44,9 @@ struct timeval  tv;
 #define	__BUFFERSIZE	16 * 32768
 //
 //
-	rawFiles::rawFiles (std::string f) {
+	rawFiles::rawFiles (std::string f, bool repeater) {
 	fileName	= f;
+	this	-> repeater	= repeater;
 	_I_Buffer	= new RingBuffer<std::complex<float>>(__BUFFERSIZE);
 	filePointer	= fopen (f. c_str (), "rb");
 	if (filePointer == NULL) {
@@ -54,7 +55,30 @@ struct timeval  tv;
 	   delete _I_Buffer;
 	   throw (31);
 	}
-	currPos		= 0;
+
+	this	-> eofHandler	= nullptr;
+	this	-> userData	= nullptr;
+	running. store (false);
+}
+
+	rawFiles::rawFiles (std::string f,
+	                    double fileOffsetInSeconds,
+	                    device_eof_callback_t eofHandler,
+	                    void * userData) {
+	fileName	= f;
+	this	-> repeater = false;
+	_I_Buffer	= new RingBuffer<std::complex<float>>(__BUFFERSIZE);
+	filePointer	= fopen (f. c_str (), "rb");
+	if (filePointer == NULL) {
+	   fprintf (stderr, "file %s cannot open\n", f. c_str ());
+	   perror ("file ?");
+	   delete _I_Buffer;
+	   throw (31);
+	}
+	currPos = (int64_t)(fileOffsetInSeconds * 2048000.0 * 2.0 );
+	fseek (filePointer, currPos, SEEK_SET);
+	this	-> eofHandler	= eofHandler;
+	this	-> userData	= userData;
 	running. store (false);
 }
 
@@ -66,12 +90,12 @@ struct timeval  tv;
 	delete _I_Buffer;
 }
 
-bool	rawFiles::restartReader	(void) {
+bool	rawFiles::restartReader	(int32_t frequency) {
+	(void)frequency;
 	workerHandle = std::thread (&rawFiles::run, this);
 	running. store (true);
 	return true;
 }
-
 
 void	rawFiles::stopReader	(void) {
        if (running. load ())
@@ -104,6 +128,7 @@ std::complex<float>	*bi;
 int32_t	bufferSize	= 32768;
 int64_t	period;
 int64_t	nextStop;
+bool	eofReached	= false;
 
 	running. store (true);
 	period		= (32768 * 1000) / (2 * 2048);	// full IQś read
@@ -119,12 +144,27 @@ int64_t	nextStop;
 
 	   nextStop += period;
 	   t = readBuffer (bi, bufferSize);
-	   if (t <= 0) {
+	   if (t < bufferSize) {
 	      for (i = 0; i < bufferSize; i ++)
 	          bi [i] = 0;
 	      t = bufferSize;
+	      eofReached	= true;
 	   }
+
 	   _I_Buffer -> putDataIntoBuffer (bi, t);
+	   if (eofReached && repeater) {
+	      fseek (filePointer, currPos, SEEK_SET);
+	      eofReached = false;
+	   }
+	   else
+	   if (eofReached && eofHandler != nullptr) {
+	      eofReached = false;
+	      eofHandler (userData);
+	   }
+	   else
+	   if (eofReached)
+	      break;
+
 	   if (nextStop - getMyTime () > 0)
 	      usleep (nextStop - getMyTime ());
 	}
@@ -144,7 +184,7 @@ uint8_t temp [2 * length];
 	currPos		+= n;
 	if (n < length) {
 	   fseek (filePointer, 0, SEEK_SET);
-	   fprintf (stderr, "End of file, restarting\n");
+//	   fprintf (stderr, "End of file, restarting\n");
 	}
 	return	n / 2;
 }

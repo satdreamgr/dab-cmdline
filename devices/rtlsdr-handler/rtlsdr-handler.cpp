@@ -19,7 +19,6 @@
  *    along with DAB library; if not, write to the Free Software
  *    Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  *
- *
  * 	This particular driver is a very simple wrapper around the
  * 	librtlsdr.  In order to keep things simple, we dynamically
  * 	load the dll (or .so). The librtlsdr is osmocom software and all rights
@@ -96,15 +95,18 @@ void	agcThread(rtlsdrHandler *theStick) {
 	                              int16_t	ppmCorrection,
 	                              int16_t	gain,
 	                              bool	autogain,
-	                              uint16_t	deviceIndex) {
+	                              uint16_t	deviceIndex,
+	                              const char *	deviceSerial,
+	                              const char *	deviceOpts ) {
 int16_t	deviceCount;
 int32_t	r;
 int16_t	i;
 
 	fprintf (stderr, "going for rtlsdr %d %d\n", frequency, gain);
 	this	-> frequency	= frequency;
+	this	-> deviceOptions	= deviceOpts ? strdup(deviceOpts) : NULL;
 	this	-> ppmCorrection	= ppmCorrection;
-	this	-> gain		= gain;
+	this	-> theGain	= gain;
 	this	-> autogain	= autogain;
 	this	-> deviceIndex	= deviceIndex;
 
@@ -113,7 +115,6 @@ int16_t	i;
 	open			= false;
 	_I_Buffer		= NULL;
 	this	-> sampleCounter= 0;
-	this	-> vfoOffset	= 0;
 	gains			= NULL;
 	running			= false;
 
@@ -154,6 +155,15 @@ int16_t	i;
 	}
 //
 //	OK, now open the hardware
+	if ( deviceSerial ) {
+		int		resultDevIdx = this -> rtlsdr_get_index_by_serial(deviceSerial);
+		if ( resultDevIdx >= 0 ) {
+			this	-> deviceIndex	= resultDevIdx;
+			deviceIndex		= resultDevIdx;
+		}
+		else
+			this	-> deviceIndex	= uint16_t(-1);
+	}
 	r			= this -> rtlsdr_open (&device, deviceIndex);
 	if (r < 0) {
 	   fprintf (stderr, "Opening rtlsdr failed, fatal\n");
@@ -181,6 +191,7 @@ int16_t	i;
 
 	r			= this -> rtlsdr_get_sample_rate (device);
 	fprintf (stderr, "samplerate set to %d\n", r);
+	//rtlsdr_set_tuner_gain_mode (device, 0);
 
 	gainsCount	= rtlsdr_get_tuner_gains (device, NULL);
 	fprintf (stderr, "Supported gain values (%d): ", gainsCount);
@@ -190,11 +201,21 @@ int16_t	i;
 	   fprintf (stderr, "%d.%d ", gains [i] / 10, gains [i] % 10);
 	fprintf (stderr, "\n");
 
-	gain		= gain * gainsCount / 100;
-	currentGainCount = gain;
+	theGain = gain * gainsCount / 100;
+	currentGainCount = theGain;
 
 	if (ppmCorrection != 0)
 	   rtlsdr_set_freq_correction (device, ppmCorrection);
+	//if (autogain)
+	//   rtlsdr_set_agc_mode (device, 1);
+	(void)(this -> rtlsdr_set_center_freq (device, frequency));
+	//fprintf (stderr, "effective gain: gain %d.%d\n",
+	//                              gains [theGain * gainsCount / 100] / 10,
+	//                              gains [theGain * gainsCount / 100] % 10);
+	//rtlsdr_set_tuner_gain (device, gains [theGain * gainsCount / 100]);
+
+	if ( this	-> deviceOptions && rtlsdr_set_opt_string )
+		rtlsdr_set_opt_string(device, deviceOptions, 1);
 
 	_I_Buffer		= new RingBuffer<uint8_t>(1024 * 1024);
 
@@ -217,11 +238,13 @@ int16_t	i;
 	}
 
 	running	= false;
-        if (agcHandle.joinable())
-	   agcHandle.join();
+	if (agcHandle.joinable())
+		agcHandle.join();
 
 	if (open)
 	   this -> rtlsdr_close (device);
+	if (this	-> deviceOptions)
+		free( this	-> deviceOptions );
 	if (Handle != NULL) 
 #ifdef __MINGW32__
 	   FreeLibrary (Handle);
@@ -235,17 +258,8 @@ int16_t	i;
 	open = false;
 }
 
-void	rtlsdrHandler::setVFOFrequency	(int32_t f) {
-	frequency	= f;
-	(void)(this -> rtlsdr_set_center_freq (device, f + vfoOffset));
-}
-
-int32_t	rtlsdrHandler::getVFOFrequency	(void) {
-	return (int32_t)(this -> rtlsdr_get_center_freq (device)) - vfoOffset;
-}
 //
-//
-bool	rtlsdrHandler::restartReader	(void) {
+bool	rtlsdrHandler::restartReader	(int32_t frequency) {
 int32_t	r;
 
 	if (running)
@@ -255,9 +269,16 @@ int32_t	r;
         if (r < 0)
            return false;
 
+	this	-> frequency	= frequency;
+        (void)(this -> rtlsdr_set_center_freq (device, frequency));
 	workerHandle = std::thread (controlThread, this);
 	setGain(currentGainCount);
 	setHwAgc(autogain);
+	//rtlsdr_set_tuner_gain (device, gains [theGain * gainsCount / 100]);
+	//if (autogain)
+	//   rtlsdr_set_agc_mode (device, 1);
+	if ( this	-> deviceOptions && rtlsdr_set_opt_string )
+		rtlsdr_set_opt_string(device, deviceOptions, 1);
 	running	= true;
 	agcHandle = std::thread (agcThread, this);
 	return true;
@@ -271,7 +292,7 @@ void	rtlsdrHandler::stopReader	(void) {
 	workerHandle. join ();
 	running	= false;
 	if (agcHandle.joinable())
-	   agcHandle.join();
+		agcHandle.join();
 }
 //
 //	when selecting with an integer in the range 0 .. 100
@@ -345,6 +366,12 @@ int32_t	rtlsdrHandler::Samples	(void) {
 bool	rtlsdrHandler::load_rtlFunctions (void) {
 //
 //	link the required procedures
+	rtlsdr_get_index_by_serial = (pfnrtlsdr_get_index_by_serial)
+	                       GETPROCADDRESS (Handle, "rtlsdr_get_index_by_serial");
+	if (rtlsdr_get_index_by_serial == NULL) {
+	   fprintf (stderr, "Could not find rtlsdr_get_index_by_serial\n");
+	   return false;
+	}
 	rtlsdr_open	= (pfnrtlsdr_open)
 	                       GETPROCADDRESS (Handle, "rtlsdr_open");
 	if (rtlsdr_open == NULL) {
@@ -468,6 +495,12 @@ bool	rtlsdrHandler::load_rtlFunctions (void) {
 	if (rtlsdr_get_device_name == NULL) {
 	   fprintf (stderr, "Could not find rtlsdr_get_device_name\n");
 	   return false;
+	}
+
+	rtlsdr_set_opt_string = (pfnrtlsdr_set_opt_string)
+	                  GETPROCADDRESS (Handle, "rtlsdr_set_opt_string");
+	if (rtlsdr_get_device_name == NULL) {
+	   fprintf (stderr, "Could not find rtlsdr_set_opt_string\n");
 	}
 
 	fprintf (stderr, "OK, functions seem to be loaded\n");
